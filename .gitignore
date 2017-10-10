@@ -1,9 +1,9 @@
 # dirs #
 ###################
 bin/
-
 build/
 docs/
+out/
 
 
 # Gradle #
