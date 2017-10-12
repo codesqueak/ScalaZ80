@@ -4,14 +4,13 @@ import com.rodent.z80.RegNames
 import com.rodent.z80.RegNames._
 import com.rodent.z80.func._
 
-case class Registers(regFile1: BaseRegisters,
-                     regFile2: BaseRegisters,
-                     indexRegisters: IndexRegisters,
-                     controlRegisters: ControlRegisters,
-                     internalRegisters: InternalRegisters) {
+case class Registers(regFile1: BaseRegisters = BaseRegisters(),
+                     regFile2: BaseRegisters = BaseRegisters(),
+                     indexRegisters: IndexRegisters = IndexRegisters(),
+                     controlRegisters: ControlRegisters = ControlRegisters(),
+                     internalRegisters: InternalRegisters = InternalRegisters()) {
 
   // flags
-  private var halt: Boolean = false
 
   // general getters
   def getPC: Int = controlRegisters.pc
@@ -29,26 +28,32 @@ case class Registers(regFile1: BaseRegisters,
   def q: Int = internalRegisters.q
 
   // reg get / set
-  def getReg(reg: RegName): Int = {
+  private def getSafeReg(reg: RegName): Option[Int] = {
     reg match {
-      case RegNames.A => regFile1.a
-      case RegNames.F => regFile1.f
-      case RegNames.B => regFile1.b
-      case RegNames.C => regFile1.c
-      case RegNames.D => regFile1.d
-      case RegNames.E => regFile1.e
-      case RegNames.H => regFile1.h
-      case RegNames.L => regFile1.l
-      case RegNames.M8 => regFile1.m8
-      case RegNames.IX => indexRegisters.ix
-      case RegNames.IY => indexRegisters.iy
-      case RegNames.PC => controlRegisters.pc
-      case RegNames.SP => controlRegisters.sp
-      case RegNames.R => controlRegisters.r
-      case RegNames.M16 => internalRegisters.m16
-      case RegNames.INST => internalRegisters.inst
-      case RegNames.ADDR => internalRegisters.addr
+      case RegNames.A => Some(regFile1.a)
+      case RegNames.F => Some(regFile1.f)
+      case RegNames.B => Some(regFile1.b)
+      case RegNames.C => Some(regFile1.c)
+      case RegNames.D => Some(regFile1.d)
+      case RegNames.E => Some(regFile1.e)
+      case RegNames.H => Some(regFile1.h)
+      case RegNames.L => Some(regFile1.l)
+      case RegNames.M8 => Some(regFile1.m8)
+      case RegNames.IX => Some(indexRegisters.ix)
+      case RegNames.IY => Some(indexRegisters.iy)
+      case RegNames.PC => Some(controlRegisters.pc)
+      case RegNames.SP => Some(controlRegisters.sp)
+      case RegNames.R => Some(controlRegisters.r)
+      case RegNames.M16 => Some(internalRegisters.m16)
+      case RegNames.INST => Some(internalRegisters.inst)
+      case RegNames.ADDR => Some(internalRegisters.addr)
+      case _ => None
     }
+  }
+
+  // reg get / set
+  def getReg(reg: RegName): Int = {
+    getSafeReg(reg).get
   }
 
   def getReg16(reg: RegName): Int = {
@@ -119,7 +124,10 @@ case class Registers(regFile1: BaseRegisters,
   }
 
   def dump(): Unit = {
-    for (c <- RegNames.values) println(c + " " + utils.toHex16(getReg(c)))
+    for (c <- RegNames.values) {
+      val v = getSafeReg(c)
+      v.foreach(v => println(c + " " + utils.toHex16(v)))
+    }
   }
 
 }

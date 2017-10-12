@@ -3,7 +3,9 @@ package com.rodent.z80.cpu
 import com.rodent.z80.io.Memory
 
 trait OptionalWriter {
-  def write(registers: Registers, memory: Memory): Registers = {
+  val memory: Memory
+
+  def write(registers: Registers): Registers = {
     registers
   }
 

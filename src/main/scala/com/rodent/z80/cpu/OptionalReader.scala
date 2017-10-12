@@ -3,7 +3,9 @@ package com.rodent.z80.cpu
 import com.rodent.z80.io.Memory
 
 trait OptionalReader {
-  def read(registers: Registers, memory: Memory): Registers = {
+  val memory: Memory
+
+  def read(registers: Registers): Registers = {
     registers
   }
 
