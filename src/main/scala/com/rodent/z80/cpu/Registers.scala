@@ -4,128 +4,122 @@ import com.rodent.z80.RegNames
 import com.rodent.z80.RegNames._
 import com.rodent.z80.func._
 
-trait Registers {
+case class Registers(regFile1: BaseRegisters,
+                     regFile2: BaseRegisters,
+                     indexRegisters: IndexRegisters,
+                     controlRegisters: ControlRegisters,
+                     internalRegisters: InternalRegisters) {
 
-  private var pc: Int = 0;
-  private var sp: Int = 0;
-  // user registers
-  private var (a, f, b, c, d, e, h, l, ix, iy, r) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-  private var (ax, fx, bx, cx, dx, ex, hx, lx) = (0, 0, 0, 0, 0, 0, 0, 0 )
-  // internal registers
-  private var (m8, m16) = (0, 0)
-  private var decode = (0, 0, 0, 0, 0)
   // flags
   private var halt: Boolean = false
 
   // general getters
-  def getPC: Int = pc
+  def getPC: Int = controlRegisters.pc
 
-  def getInst: Int = m8
+  def getInst: Int = internalRegisters.inst
 
-  def getDecodeInst: Int = decode._1
+  def getDecodeInst: Int = internalRegisters.x
 
-  def src: Int = decode._2
+  def src: Int = internalRegisters.y
 
-  def dst: Int = decode._3
-  def p: Int = decode._4
-  def q: Int = decode._5
+  def dst: Int = internalRegisters.z
 
-  // general setters
-  def setPC(addr: Int): Unit = pc = addr
+  def p: Int = internalRegisters.p
 
-  def setInst(v: Int): Unit = m8 = v
-
-  def setDecode(v: (Int, Int, Int, Int, Int)): Unit = decode = v
-
-  // PC stuff
-  def incPC: Int = {
-    pc = (pc + 1) & 0xFFFF
-    pc
-  }
+  def q: Int = internalRegisters.q
 
   // reg get / set
   def getReg(reg: RegName): Int = {
     reg match {
-      case RegNames.A => a
-      case RegNames.F => f
-      case RegNames.B => b
-      case RegNames.C => c
-      case RegNames.D => d
-      case RegNames.E => e
-      case RegNames.H => h
-      case RegNames.L => l
-      case RegNames.IX => ix
-      case RegNames.IY => iy
-      case RegNames.PC => pc
-      case RegNames.SP => sp
-      case RegNames.R => r
-      case RegNames.M8 => m8
-      case RegNames.M16 => m16
+      case RegNames.A => regFile1.a
+      case RegNames.F => regFile1.f
+      case RegNames.B => regFile1.b
+      case RegNames.C => regFile1.c
+      case RegNames.D => regFile1.d
+      case RegNames.E => regFile1.e
+      case RegNames.H => regFile1.h
+      case RegNames.L => regFile1.l
+      case RegNames.M8 => regFile1.m8
+      case RegNames.IX => indexRegisters.ix
+      case RegNames.IY => indexRegisters.iy
+      case RegNames.PC => controlRegisters.pc
+      case RegNames.SP => controlRegisters.sp
+      case RegNames.R => controlRegisters.r
+      case RegNames.M16 => internalRegisters.m16
+      case RegNames.INST => internalRegisters.inst
+      case RegNames.ADDR => internalRegisters.addr
     }
   }
 
   def getReg16(reg: RegName): Int = {
     reg match {
-      case RegNames.A => (a << 8) + f
-      case RegNames.B => (b << 8) + c
-      case RegNames.D => (d << 8) + e
-      case RegNames.H => (h << 8) + l
-      case RegNames.IX => ix
-      case RegNames.IY => iy
-      case RegNames.PC => pc
-      case RegNames.SP => sp
-      case RegNames.M16 => m16
+      case RegNames.A => (regFile1.a << 8) + regFile1.f
+      case RegNames.B => (regFile1.b << 8) + regFile1.c
+      case RegNames.D => (regFile1.d << 8) + regFile1.e
+      case RegNames.H => (regFile1.h << 8) + regFile1.l
+      case RegNames.IX => indexRegisters.ix
+      case RegNames.IY => indexRegisters.iy
+      case RegNames.PC => controlRegisters.pc
+      case RegNames.SP => controlRegisters.sp
+      case RegNames.M16 => internalRegisters.m16
+      case RegNames.ADDR => internalRegisters.addr
     }
   }
 
-  def setReg(reg: RegName, v: Int): Unit = {
+  def setBaseReg(reg: RegName, v: Int): BaseRegisters = {
     reg match {
-      case RegNames.A => a = v
-      case RegNames.F => f = v
-      case RegNames.B => b = v
-      case RegNames.C => c = v
-      case RegNames.D => d = v
-      case RegNames.E => e = v
-      case RegNames.H => h = v
-      case RegNames.L => l = v
-      case RegNames.IX => ix = v
-      case RegNames.IY => iy = v
-      case RegNames.PC => pc = v
-      case RegNames.SP => sp = v
-      case RegNames.R => r = v
-      case RegNames.M8 => m8 = v
-      case RegNames.M16 => m16 = v
+      case RegNames.A => regFile1.copy(a = v)
+      case RegNames.F => regFile1.copy(f = v)
+      case RegNames.B => regFile1.copy(b = v)
+      case RegNames.C => regFile1.copy(c = v)
+      case RegNames.D => regFile1.copy(e = v)
+      case RegNames.E => regFile1.copy(e = v)
+      case RegNames.H => regFile1.copy(h = v)
+      case RegNames.L => regFile1.copy(l = v)
+      case RegNames.M8 => regFile1.copy(m8 = v)
     }
   }
 
-  def setReg16(reg: RegName, v: Int): Unit = {
+  def setIndexReg(reg: RegName, v: Int): IndexRegisters = {
     reg match {
-      case RegNames.A => {
-        a = (v & 0xFF00) >> 8
-        f = v & 0x00FF
-      }
-      case RegNames.B => {
-        b = (v & 0xFF00) >> 8
-        c = v & 0x00FF
-      }
-      case RegNames.D => {
-        d = (v & 0xFF00) >> 8
-        e = v & 0x00FF
-      }
-      case RegNames.H => {
-        h = (v & 0xFF00) >> 8
-        l = v & 0x00FF
-      }
-      case RegNames.IX => ix = v
-      case RegNames.IY => iy = v
-      case RegNames.PC => pc = v
-      case RegNames.SP => sp = v
-      case RegNames.M16 => m16 = v
+      case RegNames.IX => indexRegisters.copy(ix = v)
+      case RegNames.IY => indexRegisters.copy(iy = v)
+    }
+  }
+
+  def setControlReg(reg: RegName, v: Int): ControlRegisters = {
+    reg match {
+      case RegNames.PC => controlRegisters.copy(pc = v)
+      case RegNames.SP => controlRegisters.copy(sp = v)
+      case RegNames.R => controlRegisters.copy(r = v)
+    }
+  }
+
+  def setInternalReg(reg: RegName, v: Int): InternalRegisters = {
+    reg match {
+      case RegNames.M16 => internalRegisters.copy(m16 = v)
+      case RegNames.ADDR => internalRegisters.copy(addr = v)
+      case RegNames.X => internalRegisters.copy(x = v)
+      case RegNames.Y => internalRegisters.copy(y = v)
+      case RegNames.Z => internalRegisters.copy(z = v)
+      case RegNames.P => internalRegisters.copy(p = v)
+      case RegNames.Q => internalRegisters.copy(q = v)
+    }
+  }
+
+  def setBaseReg16(reg: RegName, v: Int): BaseRegisters = {
+    val msb = (v & 0xFF00) >> 8
+    val lsb = v & 0x00FF
+    reg match {
+      case RegNames.A => regFile1.copy(a = msb, f = lsb)
+      case RegNames.B => regFile1.copy(b = msb, c = lsb)
+      case RegNames.D => regFile1.copy(d = msb, e = lsb)
+      case RegNames.H => regFile1.copy(h = msb, l = lsb)
     }
   }
 
   def dump(): Unit = {
-    for (c <- RegNames.values) println(c + " " + util.toHex16(getReg(c)))
+    for (c <- RegNames.values) println(c + " " + utils.toHex16(getReg(c)))
   }
 
 }
