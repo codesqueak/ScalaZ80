@@ -4,9 +4,9 @@ import scala.runtime.RichInt
 
 // Varoius util functions
 
-class utils {}
+class Utils {}
 
-object utils {
+object Utils {
 
   def toHex16(v: Int): String = {
     val hex = "0000" + new RichInt(v).toHexString;

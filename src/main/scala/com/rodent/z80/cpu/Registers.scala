@@ -1,7 +1,7 @@
 package com.rodent.z80.cpu
 
-import com.rodent.z80.RegNames
-import com.rodent.z80.RegNames._
+import com.rodent.z80.CPU.RegNames
+import com.rodent.z80.CPU.RegNames.RegName
 import com.rodent.z80.func._
 
 case class Registers(regFile1: BaseRegisters = BaseRegisters(),
@@ -126,7 +126,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
   def dump(): Unit = {
     for (c <- RegNames.values) {
       val v = getSafeReg(c)
-      v.foreach(v => println(c + " " + utils.toHex16(v)))
+      v.foreach(v => println(c + " " + Utils.toHex16(v)))
     }
   }
 
