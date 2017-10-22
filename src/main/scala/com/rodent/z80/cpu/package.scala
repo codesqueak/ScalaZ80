@@ -7,4 +7,16 @@ package object CPU {
     val A, F, B, C, D, E, H, L, IX, IY, SP, PC, R, INST, M8, M16, ADDR, X, Y, Z, P, Q = Value
   }
 
+  class RegInt(val v: Int) {
+    def inc8: Int = (v + 1) & 0x00FF
+
+    def dec8: Int = (v - 1) & 0x00FF
+
+    def inc16: Int = (v + 1) & 0xFFFF
+
+    def dec16: Int = (v - 1) & 0xFFFF
+  }
+
+  implicit def regInt(v: Int): RegInt = new RegInt(v)
+
 }
