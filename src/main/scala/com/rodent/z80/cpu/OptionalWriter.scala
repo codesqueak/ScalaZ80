@@ -1,6 +1,6 @@
 package com.rodent.z80.cpu
 
-import com.rodent.z80.CPU.RegNames
+import com.rodent.z80.CPU._
 import com.rodent.z80.io.Memory
 
 // Process additional memory writes where required
@@ -14,9 +14,14 @@ trait OptionalWriter {
     r.internalRegisters.x match {
       case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.p == atHL) => save8toHL(r)
       case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.p == atHL) => save8toHL(r)
+      case 0 if (r.internalRegisters.z == 6) && (r.internalRegisters.p == atHL) => save8toHL(r)
+      //
       case 1 if r.internalRegisters.y == 6 => save8toHL(r)
+      //
       case 2 => r
+      //
       case 3 => r
+      //
       case _ => r
     }
   }

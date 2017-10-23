@@ -6,10 +6,20 @@ import com.rodent.z80.io.Memory
 import scala.language.implicitConversions
 
 trait ALU {
+  // flags register bits
+  val s = 0x80
+  val z = 0x40
+  val f5 = 0x20
+  val h = 0x10
+  val f3 = 0x08
+  val pv = 0x04
+  val n = 0x02
+  val c = 0x01
 
-  val memory: Memory
   val reg8Bit = Map(0 -> RegNames.B, 1 -> RegNames.C, 2 -> RegNames.D, 3 -> RegNames.E, 4 -> RegNames.H, 5 -> RegNames.L, 6 -> RegNames.M8, 7 -> RegNames.A)
   val reg16Bit = Map(0 -> RegNames.B, 1 -> RegNames.D, 2 -> RegNames.H, 3 -> RegNames.SP)
+
+  val memory: Memory
 
   def execute(registers: Registers): Registers = {
     // http://www.z80.info/decoding.htm
@@ -43,9 +53,29 @@ trait ALU {
       case 3 => incDec16(r)
       case 4 => inc8(r)
       case 5 => dec8(r)
-      case 6 => r
-      case 7 => r
+      case 6 => ldImmediate8(r)
+      case 7 => variousBlock0(r)
     }
+  }
+
+  // various block 0 8 bit math ops
+  private def variousBlock0(r: Registers): Registers = {
+    r.internalRegisters.y match {
+      case 0 => r // rlca
+      case 1 => r // rrca
+      case 2 => r // rla
+      case 3 => r // rra
+      case 4 => r // daa
+      case 5 => r // cpl
+      case 6 => r.copy(regFile1 = r.setBaseReg(RegNames.F, r.getReg(RegNames.F) | c)) // scf
+      case 7 => r.copy(regFile1 = r.setBaseReg(RegNames.F, r.getReg(RegNames.F) ^ c)) // ccf
+    }
+  }
+
+  // ld r,nn
+  private def ldImmediate8(r: Registers): Registers = {
+    val regName = reg8Bit(r.p)
+    r.copy(regFile1 = r.setBaseReg(regName, r.getReg(RegNames.M8)))
   }
 
   // inc / dec rr

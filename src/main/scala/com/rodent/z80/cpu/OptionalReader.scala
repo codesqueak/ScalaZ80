@@ -1,6 +1,6 @@
 package com.rodent.z80.cpu
 
-import com.rodent.z80.CPU.RegNames
+import com.rodent.z80.CPU._
 import com.rodent.z80.io.Memory
 
 // Process additional memory reads where required
@@ -15,10 +15,13 @@ trait OptionalReader {
       case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r)
       case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.p == atHL) => load8atHL(r)
       case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.p == atHL) => load8atHL(r)
+      case 0 if r.internalRegisters.z == 6 => loadImmediate8(r)
       case 0 => r
       //
       case 1 if r.internalRegisters.z == atHL => load8atHL(r)
+      //
       case 2 => r
+      //
       case 3 => r
       //
       case _ => r
@@ -32,14 +35,23 @@ trait OptionalReader {
     registers.copy(regFile1 = br)
   }
 
+  // Load 8 bit value following instruction
+  private def loadImmediate8(registers: Registers): Registers = {
+    var addr = registers.getPC
+    val v = memory.getMemory(addr)
+    val rf1 = registers.regFile1.copy(m8 = v)
+    val cr = registers.controlRegisters.copy(pc = addr.inc16)
+    registers.copy(controlRegisters = cr, regFile1 = rf1)
+  }
+
   // Load 16 bit value following instruction
   private def loadImmediate16(registers: Registers): Registers = {
     var addr = registers.getPC
     val lsb = memory.getMemory(addr)
-    addr = (addr + 1) & 0xFFFF
+    addr = addr.inc16
     val v = (memory.getMemory(addr) << 8) + lsb
     val ir = registers.internalRegisters.copy(m16 = v)
-    val cr = registers.controlRegisters.copy(pc = (addr + 1) & 0xFFFF)
+    val cr = registers.controlRegisters.copy(pc = addr.inc16)
     registers.copy(controlRegisters = cr, internalRegisters = ir)
   }
 }
