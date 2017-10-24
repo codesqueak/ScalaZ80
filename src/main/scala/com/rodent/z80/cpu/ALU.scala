@@ -47,15 +47,48 @@ trait ALU {
   private def general0(registers: Registers): Registers = {
     var r = registers
     r.internalRegisters.z match {
-      case 0 => r
+      case 0 => jmpRelative(r)
       case 1 => ldadd16(r)
-      case 2 => r
+      case 2 => indirectLoad(r)
       case 3 => incDec16(r)
       case 4 => inc8(r)
       case 5 => dec8(r)
       case 6 => ldImmediate8(r)
       case 7 => variousBlock0(r)
     }
+  }
+
+  // various block 0 jumps
+  private def jmpRelative(r: Registers): Registers = {
+    r.internalRegisters.y match {
+      case 0 => r // nop
+      case 1 => r // ex af,af'
+      case 2 => r // djnz d
+      case 3 => r // jr d
+      case 4 => r // jr nz d
+      case 5 => r // jr z d
+      case 6 => r // jr nc d
+      case 7 => r // jr c d
+    }
+  }
+
+  // Indirect loading
+  private def indirectLoad(r: Registers): Registers = {
+    if (0 == r.internalRegisters.q)
+      r.internalRegisters.p match {
+        case 0 => r // LD (BC), A
+        case 1 => r // LD (DE), A
+        case 2 => r // LD (nn), HL
+        case 3 => r // LD (nn), A
+      }
+    else
+      r.internalRegisters.p match {
+        case 0 => r // LD A, (BC)
+        case 1 => r // LD A, (DE)
+        case 2 => r // LD HL, (nn)
+        case 3 => r // LD A, (nn)
+      }
+    r
   }
 
   // various block 0 8 bit math ops
@@ -67,8 +100,8 @@ trait ALU {
       case 3 => r // rra
       case 4 => r // daa
       case 5 => r // cpl
-      case 6 => r.copy(regFile1 = r.setBaseReg(RegNames.F, r.getReg(RegNames.F) | c)) // scf
-      case 7 => r.copy(regFile1 = r.setBaseReg(RegNames.F, r.getReg(RegNames.F) ^ c)) // ccf
+      case 6 => r // scf
+      case 7 => r // ccf
     }
   }
 
@@ -144,8 +177,8 @@ trait ALU {
   private def load8(registers: Registers): Registers = {
     val srcReg = registers.internalRegisters.z
     val v = registers.getReg(reg8Bit(srcReg))
-    // 0 1 2 3 4 5 6    7
-    // B C D E H L (HL) M
+    // 0 1 2 3 4 5 6 7
+    // B C D E H L M A
     var r = registers.regFile1
     registers.internalRegisters.y match {
       case 0 => r = r.copy(b = v)
