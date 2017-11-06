@@ -10,13 +10,22 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                      controlRegisters: ControlRegisters = ControlRegisters(),
                      internalRegisters: InternalRegisters = InternalRegisters()) {
 
-  // flags
+  // flag register bits
+  private val s = 0x80
+  private val z = 0x40
+  private val f5 = 0x20
+  private val h = 0x10
+  private val f3 = 0x08
+  private val pv = 0x04
+  private val n = 0x02
+  private val c = 0x01
 
   // general getters
   def getPC: Int = controlRegisters.pc
 
   def getInst: Int = internalRegisters.inst
 
+  // decoded instruction bit fields
   def getDecodeInst: Int = internalRegisters.x
 
   def src: Int = internalRegisters.y
@@ -27,7 +36,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def q: Int = internalRegisters.q
 
-  // reg get / set
+  // reg get
   private def getSafeReg(reg: RegName): Option[Int] = {
     reg match {
       case RegNames.A => Some(regFile1.a)
@@ -44,14 +53,14 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.PC => Some(controlRegisters.pc)
       case RegNames.SP => Some(controlRegisters.sp)
       case RegNames.R => Some(controlRegisters.r)
-      case RegNames.M16 => Some(internalRegisters.m16)
+      case RegNames.M16 => Some(regFile1.m16)
       case RegNames.INST => Some(internalRegisters.inst)
       case RegNames.ADDR => Some(internalRegisters.addr)
       case _ => None
     }
   }
 
-  // reg get / set
+  // reg get
   def getReg(reg: RegName): Int = {
     getSafeReg(reg).get
   }
@@ -66,7 +75,22 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.IY => indexRegisters.iy
       case RegNames.PC => controlRegisters.pc
       case RegNames.SP => controlRegisters.sp
-      case RegNames.M16 => internalRegisters.m16
+      case RegNames.M16 => regFile1.m16
+      case RegNames.ADDR => internalRegisters.addr
+    }
+  }
+
+  def getAltReg16(reg: RegName): Int = {
+    reg match {
+      case RegNames.A => (regFile2.a << 8) + regFile2.f
+      case RegNames.B => (regFile2.b << 8) + regFile2.c
+      case RegNames.D => (regFile2.d << 8) + regFile2.e
+      case RegNames.H => (regFile2.h << 8) + regFile2.l
+      case RegNames.IX => indexRegisters.ix
+      case RegNames.IY => indexRegisters.iy
+      case RegNames.PC => controlRegisters.pc
+      case RegNames.SP => controlRegisters.sp
+      case RegNames.M16 => regFile2.m16
       case RegNames.ADDR => internalRegisters.addr
     }
   }
@@ -92,6 +116,14 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
     }
   }
 
+  def setPC(v: Int): ControlRegisters = {
+    controlRegisters.copy(pc = v)
+  }
+
+  def setSP(v: Int): ControlRegisters = {
+    controlRegisters.copy(sp = v)
+  }
+
   def setControlReg(reg: RegName, v: Int): ControlRegisters = {
     reg match {
       case RegNames.PC => controlRegisters.copy(pc = v)
@@ -102,7 +134,6 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def setInternalReg(reg: RegName, v: Int): InternalRegisters = {
     reg match {
-      case RegNames.M16 => internalRegisters.copy(m16 = v)
       case RegNames.ADDR => internalRegisters.copy(addr = v)
       case RegNames.X => internalRegisters.copy(x = v)
       case RegNames.Y => internalRegisters.copy(y = v)
@@ -120,9 +151,55 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.B => regFile1.copy(b = msb, c = lsb)
       case RegNames.D => regFile1.copy(d = msb, e = lsb)
       case RegNames.H => regFile1.copy(h = msb, l = lsb)
+      case RegNames.M16 => regFile1.copy(m16 = v)
     }
   }
 
+  def setAltBaseReg16(reg: RegName, v: Int): BaseRegisters = {
+    val msb = (v & 0xFF00) >> 8
+    val lsb = v & 0x00FF
+    reg match {
+      case RegNames.A => regFile2.copy(a = msb, f = lsb)
+      case RegNames.B => regFile2.copy(b = msb, c = lsb)
+      case RegNames.D => regFile2.copy(d = msb, e = lsb)
+      case RegNames.H => regFile2.copy(h = msb, l = lsb)
+    }
+  }
+
+  // get flag settings
+  def isS: Boolean = 0 != (regFile1.f & s)
+
+  def isNS: Boolean = !isS
+
+  def isZ: Boolean = 0 != (regFile1.f & z)
+
+  def isNZ: Boolean = !isZ
+
+  def isF5: Boolean = 0 != (regFile1.f & f5)
+
+  def isNF5: Boolean = !isF5
+
+  def isH: Boolean = 0 != (regFile1.f & h)
+
+  def isNH: Boolean = !isH
+
+  def isF3: Boolean = 0 != (regFile1.f & f3)
+
+  def isNF3: Boolean = !isF3
+
+  def isPV: Boolean = 0 != (regFile1.f & pv)
+
+  def isNPV: Boolean = !isPV
+
+  def isN: Boolean = 0 != (regFile1.f & n)
+
+  def isNN: Boolean = !isN
+
+  def isC: Boolean = 0 != (regFile1.f & c)
+
+  def isNC: Boolean = !isC
+
+  // debug register dump
   def dump(): Unit = {
     for (c <- RegNames.values) {
       val v = getSafeReg(c)

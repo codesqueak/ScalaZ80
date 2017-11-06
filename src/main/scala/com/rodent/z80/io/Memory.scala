@@ -17,4 +17,9 @@ class Memory {
 
   def setMemory(addr: Int, byteVal: Int): Unit = ram(addr) = byteVal
 
+  def setMemory16(addr: Int, wordVal: Int): Unit = {
+    ram(addr) = wordVal & 0x00FF
+    ram((addr + 1) & 0xFFFF) = (wordVal & 0xFF00) >>> 8
+  }
+
 }

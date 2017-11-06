@@ -15,6 +15,10 @@ package object CPU {
     def inc16: Int = (v + 1) & 0xFFFF
 
     def dec16: Int = (v - 1) & 0xFFFF
+
+    def lsb: Int = v & 0x00FF;
+
+    def msb: Int = (v & 0x00FF00) >>> 8
   }
 
   implicit def regInt(v: Int): RegInt = new RegInt(v)

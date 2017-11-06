@@ -13,9 +13,15 @@ trait OptionalReader {
   def read(r: Registers): Registers = {
     r.internalRegisters.x match {
       case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r)
-      case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.p == atHL) => load8atHL(r)
-      case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.p == atHL) => load8atHL(r)
-      case 0 if r.internalRegisters.z == 6 => loadImmediate8(r)
+      case 0 if r.internalRegisters.inst == 0x0A => load8atBC(r) // LD A, (BC)
+      case 0 if r.internalRegisters.inst == 0x1A => load8atDE(r) // LD A, (DE)
+      case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD HL, (nn)
+      case 0 if r.internalRegisters.inst == 0x3A => load8atNN(r) // LD A, (nn)
+      case 0 if (r.internalRegisters.z == 0) && (r.internalRegisters.y > 1) => loadImmediate8(r) //jr
+      case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.p == atHL) => load8atHL(r) // inc (hl)
+      case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.p == atHL) => load8atHL(r) // dec (hl)
+      case 0 if r.internalRegisters.z == 6 => loadImmediate8(r) // ld r,n
+
       case 0 => r
       //
       case 1 if r.internalRegisters.z == atHL => load8atHL(r)
@@ -30,10 +36,36 @@ trait OptionalReader {
 
   // Load byte at (HL)
   private def load8atHL(registers: Registers): Registers = {
-    var m8 = memory.getMemory(registers.getReg16(RegNames.H))
-    val br = registers.regFile1.copy(m8 = m8)
+    val br = registers.regFile1.copy(m8 = memory.getMemory(registers.getReg16(RegNames.H)))
     registers.copy(regFile1 = br)
   }
+
+  // Load byte at (BC)
+  private def load8atBC(registers: Registers): Registers = {
+    val br = registers.regFile1.copy(m8 = memory.getMemory(registers.getReg16(RegNames.B)))
+    registers.copy(regFile1 = br)
+  }
+
+  // Load byte at (DE)
+  private def load8atDE(registers: Registers): Registers = {
+    val br = registers.regFile1.copy(m8 = memory.getMemory(registers.getReg16(RegNames.D)))
+    registers.copy(regFile1 = br)
+  }
+
+  // Load byte at (NN)
+  private def load8atNN(registers: Registers): Registers = {
+    var r = loadImmediate16(registers)
+    r.copy(regFile1 = r.setBaseReg(RegNames.M8, memory.getMemory(r.regFile1.m16)))
+  }
+
+  // Load word at (NN)
+  private def load16atNN(registers: Registers): Registers = {
+    var r = loadImmediate16(registers)
+    var addr = r.regFile1.m16
+    val v = memory.getMemory(addr) | (memory.getMemory(addr.inc16) << 8)
+    r.copy(regFile1 = r.setBaseReg(RegNames.M16, v))
+  }
+
 
   // Load 8 bit value following instruction
   private def loadImmediate8(registers: Registers): Registers = {
@@ -50,8 +82,8 @@ trait OptionalReader {
     val lsb = memory.getMemory(addr)
     addr = addr.inc16
     val v = (memory.getMemory(addr) << 8) + lsb
-    val ir = registers.internalRegisters.copy(m16 = v)
+    val rf1 = registers.setBaseReg16(RegNames.M16, v)
     val cr = registers.controlRegisters.copy(pc = addr.inc16)
-    registers.copy(controlRegisters = cr, internalRegisters = ir)
+    registers.copy(controlRegisters = cr, regFile1 = rf1)
   }
 }
