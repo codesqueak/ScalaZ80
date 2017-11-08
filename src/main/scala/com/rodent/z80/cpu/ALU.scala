@@ -63,14 +63,13 @@ trait ALU {
       case 2 => // djnz d
         val b = r.getReg(RegNames.B).dec8 // oddly doesn't impact flags ...
         r.copy(regFile1 = r.setBaseReg(RegNames.B, b))
-        if (0 != b) jr(r)
+        if (0 != b) jr(r) else r
       case 3 => jr(r) // jr d
       case 4 if r.isNZ => jr(r) // jr nz d
       case 5 if r.isZ => jr(r) // jr z d
       case 6 if r.isNC => jr(r) // jr nc d
       case 7 if r.isC => jr(r) // jr c d
     }
-    r
   }
 
   // Indirect loading
@@ -95,15 +94,59 @@ trait ALU {
   // various block 0, 8 bit math ops
   private def variousBlock0(r: Registers): Registers = {
     r.internalRegisters.y match {
-      case 0 => r // rlca
-      case 1 => r // rrca
-      case 2 => r // rla
-      case 3 => r // rra
+      case 0 => rlca(r) // rlca
+      case 1 => rrca(r) // rrca
+      case 2 => rla(r) // rla
+      case 3 => rra(r) // rra
       case 4 => r // daa
-      case 5 => r // cpl
-      case 6 => r // scf
-      case 7 => r // ccf
+      case 5 => cpl(r) // cpl
+      case 6 => r.copy(regFile1 = r.setResult8(r.getA, cf = Some(true))) // scf
+      case 7 => r.copy(regFile1 = r.setResult8(r.getA, cf = Some(!r.isC))) // ccf
     }
+  }
+
+  // rlca
+  private def rlca(r: Registers): Registers = {
+    val c = (r.getA & 0x80) > 0
+    var a = (r.getA << 1) & 0xFF
+    if (c) a += 1
+    r.copy(regFile1 = r.setResult8(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
+  }
+
+  // rrca
+  private def rrca(r: Registers): Registers = {
+    val c = (r.getA & 0x01) > 0
+    var a = r.getA >>> 1
+    if (c) a = a | 0x80
+    r.copy(regFile1 = r.setResult8(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
+  }
+
+  // rla
+  private def rla(r: Registers): Registers = {
+    val c = (r.getA & 0x80) > 0
+    var a = (r.getA << 1) & 0xFF
+    if (r.isC) a += 1
+    r.copy(regFile1 = r.setResult8(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
+  }
+
+  // rra
+  private def rra(r: Registers): Registers = {
+    val c = (r.getA & 0x01) > 0
+    var a = r.getA >>> 1
+    if (r.isC) a += 1
+    r.copy(regFile1 = r.setResult8(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
+  }
+
+  // cpl
+  private def cpl(r: Registers): Registers = {
+    val a = r.getA ^ 0xFF
+    r.copy(regFile1 = r.setResult8(a, f5f = a.f5, f3f = a.f3, hf = Some(true), nf = Some(true)))
+  }
+
+  // daa
+  private def daa(r: Registers): Registers = {
+    val a = r.getA ^ 0xFF
+    r.copy(regFile1 = r.setResult8(a, f5f = a.f5, f3f = a.f3, hf = Some(true), nf = Some(true)))
   }
 
   // ld r,nn

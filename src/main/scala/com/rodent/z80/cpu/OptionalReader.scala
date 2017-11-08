@@ -66,7 +66,6 @@ trait OptionalReader {
     r.copy(regFile1 = r.setBaseReg(RegNames.M16, v))
   }
 
-
   // Load 8 bit value following instruction
   private def loadImmediate8(registers: Registers): Registers = {
     var addr = registers.getPC
