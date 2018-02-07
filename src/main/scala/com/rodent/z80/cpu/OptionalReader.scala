@@ -1,6 +1,6 @@
 package com.rodent.z80.cpu
 
-import com.rodent.z80.CPU._
+import com.rodent.z80.CPUZ._
 import com.rodent.z80.io.Memory
 
 // Process additional memory reads where required

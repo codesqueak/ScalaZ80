@@ -1,6 +1,6 @@
 package com.rodent.z80
 
-package object CPU {
+package object CPUZ {
 
   object RegNames extends Enumeration {
     type RegName = Value

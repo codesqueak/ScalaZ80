@@ -1,7 +1,7 @@
 package com.rodent.z80.cpu
 
-import com.rodent.z80.CPU.RegNames
-import com.rodent.z80.CPU.RegNames.RegName
+import com.rodent.z80.CPUZ.RegNames
+import com.rodent.z80.CPUZ.RegNames.RegName
 import com.rodent.z80.func._
 
 case class Registers(regFile1: BaseRegisters = BaseRegisters(),

@@ -3,7 +3,7 @@ package com.rodent.z80
 import com.rodent.z80.cpu.{Processor, Registers}
 import com.rodent.z80.io._
 
-// Simpel test machine config and run
+// Simple test machine config and run
 object Z80 extends App {
   println("Z80!")
   val memory = new Memory()
