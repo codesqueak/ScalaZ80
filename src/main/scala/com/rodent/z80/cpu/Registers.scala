@@ -201,6 +201,57 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def isNC: Boolean = !isC
 
+  // set 8 bit reg  and associated flags
+  def setFlags(sf: Option[Boolean] = None,
+               zf: Option[Boolean] = None,
+               f5f: Option[Boolean] = None,
+               hf: Option[Boolean] = None,
+               f3f: Option[Boolean] = None,
+               pvf: Option[Boolean] = None,
+               nf: Option[Boolean] = None,
+               cf: Option[Boolean] = None
+              ): BaseRegisters = {
+    var flags = regFile1.f
+
+    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
+    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
+    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
+    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
+    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
+    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
+    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
+    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
+
+    regFile1.copy(f = flags)
+  }
+
+  // set A and associated flags
+  def setResult8(reg: RegName,
+                 v: Int,
+                 sf: Option[Boolean] = None,
+                 zf: Option[Boolean] = None,
+                 f5f: Option[Boolean] = None,
+                 hf: Option[Boolean] = None,
+                 f3f: Option[Boolean] = None,
+                 pvf: Option[Boolean] = None,
+                 nf: Option[Boolean] = None,
+                 cf: Option[Boolean] = None
+                ): BaseRegisters = {
+    var flags = regFile1.f
+
+    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
+    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
+    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
+    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
+    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
+    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
+    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
+    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
+
+    setBaseReg(reg, v).copy(f = flags)
+  }
+
+
   // set A and associated flags
   def setResult8(v: Int,
                  sf: Option[Boolean] = None,
@@ -224,6 +275,31 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
     cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
 
     regFile1.copy(a = v, f = flags)
+  }
+
+  // set HL and associated flags
+  def setResult16(v: Int,
+                  sf: Option[Boolean] = None,
+                  zf: Option[Boolean] = None,
+                  f5f: Option[Boolean] = None,
+                  hf: Option[Boolean] = None,
+                  f3f: Option[Boolean] = None,
+                  pvf: Option[Boolean] = None,
+                  nf: Option[Boolean] = None,
+                  cf: Option[Boolean] = None
+                 ): BaseRegisters = {
+    var flags = regFile1.f
+
+    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
+    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
+    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
+    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
+    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
+    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
+    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
+    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
+
+    regFile1.copy(h = (v & 0xFF00) >> 8, l = v & 0x00FF, f = flags)
   }
 
 
