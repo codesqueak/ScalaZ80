@@ -19,6 +19,14 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
   private val pv = 0x04
   private val n = 0x02
   private val c = 0x01
+  private val ns = s ^ 0xFF
+  private val nz = z ^ 0xFF
+  private val nf5 = f5 ^ 0xFF
+  private val nh = h ^ 0xFF
+  private val nf3 = f3 ^ 0xFF
+  private val npv = pv ^ 0xFF
+  private val nn = n ^ 0xFF
+  private val nc = c ^ 0xFF
 
   // general getters
   def getPC: Int = controlRegisters.pc
@@ -211,21 +219,11 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                nf: Option[Boolean] = None,
                cf: Option[Boolean] = None
               ): BaseRegisters = {
-    var flags = regFile1.f
-
-    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
-    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
-    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
-    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
-    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
-    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
-    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
-    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
-
+    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(f = flags)
   }
 
-  // set A and associated flags
+  // set a register and associated flags
   def setResult8(reg: RegName,
                  v: Int,
                  sf: Option[Boolean] = None,
@@ -237,23 +235,12 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                  nf: Option[Boolean] = None,
                  cf: Option[Boolean] = None
                 ): BaseRegisters = {
-    var flags = regFile1.f
-
-    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
-    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
-    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
-    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
-    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
-    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
-    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
-    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
-
+    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     setBaseReg(reg, v).copy(f = flags)
   }
 
-
   // set A and associated flags
-  def setResult8(v: Int,
+  def setResultA(v: Int,
                  sf: Option[Boolean] = None,
                  zf: Option[Boolean] = None,
                  f5f: Option[Boolean] = None,
@@ -263,22 +250,12 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                  nf: Option[Boolean] = None,
                  cf: Option[Boolean] = None
                 ): BaseRegisters = {
-    var flags = regFile1.f
-
-    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
-    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
-    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
-    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
-    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
-    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
-    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
-    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
-
+    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(a = v, f = flags)
   }
 
   // set HL and associated flags
-  def setResult16(v: Int,
+  def setResultHL(v: Int,
                   sf: Option[Boolean] = None,
                   zf: Option[Boolean] = None,
                   f5f: Option[Boolean] = None,
@@ -288,20 +265,22 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                   nf: Option[Boolean] = None,
                   cf: Option[Boolean] = None
                  ): BaseRegisters = {
-    var flags = regFile1.f
-
-    sf.map(if (_) flags | s else flags ^ s).getOrElse(flags)
-    zf.map(if (_) flags | z else flags ^ z).getOrElse(flags)
-    f5f.map(if (_) flags | f5 else flags ^ f5).getOrElse(flags)
-    hf.map(if (_) flags | h else flags ^ h).getOrElse(flags)
-    f3f.map(if (_) flags | f3 else flags ^ f3).getOrElse(flags)
-    pvf.map(if (_) flags | pv else flags ^ pv).getOrElse(flags)
-    nf.map(if (_) flags | n else flags ^ n).getOrElse(flags)
-    cf.map(if (_) flags | c else flags ^ c).getOrElse(flags)
-
+    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(h = (v & 0xFF00) >> 8, l = v & 0x00FF, f = flags)
   }
 
+  private def fixFlags(sf: Option[Boolean], zf: Option[Boolean], f5f: Option[Boolean], hf: Option[Boolean], f3f: Option[Boolean], pvf: Option[Boolean], nf: Option[Boolean], cf: Option[Boolean]) = {
+    var flags = regFile1.f
+    sf.map(if (_) flags | s else flags & ns).getOrElse(flags)
+    zf.map(if (_) flags | z else flags & nz).getOrElse(flags)
+    f5f.map(if (_) flags | f5 else flags & nf5).getOrElse(flags)
+    hf.map(if (_) flags | h else flags & nh).getOrElse(flags)
+    f3f.map(if (_) flags | f3 else flags & nf3).getOrElse(flags)
+    pvf.map(if (_) flags | pv else flags & npv).getOrElse(flags)
+    nf.map(if (_) flags | n else flags & nn).getOrElse(flags)
+    cf.map(if (_) flags | c else flags & nc).getOrElse(flags)
+    flags
+  }
 
   // debug register dump
   def dump(): Unit = {

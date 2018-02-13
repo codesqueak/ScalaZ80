@@ -58,8 +58,8 @@ trait ALU {
   private def general8BitALU(registers: Registers): Registers = {
     var r = registers
     r.internalRegisters.y match {
-      case 0 => add8(r)
-      case 1 => println("todo adc")
+      case 0 => add8(r) // flags ok
+      case 1 => adc8(r) // flags ok
       case 2 => println("todo sub")
       case 3 => println("todo sbc")
       case 4 => println("todo and")
@@ -130,7 +130,7 @@ trait ALU {
     val c = (r.getA & 0x80) > 0
     var v = (r.getA << 1) & 0xFF
     if (c) v += 1
-    r.copy(regFile1 = r.setResult8(v, cf = Some(c), f5f = v.f5, f3f = v.f3, hf = Some(false), nf = Some(false)))
+    r.copy(regFile1 = r.setResultA(v, cf = Some(c), f5f = v.f5, f3f = v.f3, hf = Some(false), nf = Some(false)))
   }
 
   // rrca
@@ -138,7 +138,7 @@ trait ALU {
     val c = (r.getA & 0x01) > 0
     var v = r.getA >>> 1
     if (c) v = v | 0x80
-    r.copy(regFile1 = r.setResult8(v, cf = Some(c), f5f = v.f5, f3f = v.f3, hf = Some(false), nf = Some(false)))
+    r.copy(regFile1 = r.setResultA(v, cf = Some(c), f5f = v.f5, f3f = v.f3, hf = Some(false), nf = Some(false)))
   }
 
   // rla
@@ -146,7 +146,7 @@ trait ALU {
     val c = (r.getA & 0x80) > 0
     var a = (r.getA << 1) & 0xFF
     if (r.isC) a += 1
-    r.copy(regFile1 = r.setResult8(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
+    r.copy(regFile1 = r.setResultA(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
   }
 
   // rra
@@ -154,25 +154,25 @@ trait ALU {
     val c = (r.getA & 0x01) > 0
     var a = r.getA >>> 1
     if (r.isC) a += 1
-    r.copy(regFile1 = r.setResult8(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
+    r.copy(regFile1 = r.setResultA(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
   }
 
   // cpl
   private def cpl(r: Registers): Registers = {
     val a = r.getA ^ 0xFF
-    r.copy(regFile1 = r.setResult8(a, f5f = a.f5, f3f = a.f3, hf = Some(true), nf = Some(true)))
+    r.copy(regFile1 = r.setResultA(a, f5f = a.f5, f3f = a.f3, hf = Some(true), nf = Some(true)))
   }
 
   // scf
   private def scf(r: Registers): Registers = {
     val a = r.getA
-    r.copy(regFile1 = r.setResult8(a, f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false), cf = Some(true)))
+    r.copy(regFile1 = r.setResultA(a, f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false), cf = Some(true)))
   }
 
   // ccf
   private def ccf(r: Registers): Registers = {
     val a = r.getA
-    r.copy(regFile1 = r.setResult8(a, f5f = a.f5, f3f = a.f3, hf = Some(r.isC), nf = Some(false), cf = Some(!r.isC)))
+    r.copy(regFile1 = r.setResultA(a, f5f = a.f5, f3f = a.f3, hf = Some(r.isC), nf = Some(false), cf = Some(!r.isC)))
   }
 
   // DAA is weird, can't find Zilog algorithm so using +0110 if Nibble>9 algorithm.
@@ -192,7 +192,7 @@ trait ALU {
       a = a + incr;
     a = a & 0xFF
 
-    r.copy(regFile1 = r.setResult8(a, cf = Some(carry), pvf = Some(getParity(a))))
+    r.copy(regFile1 = r.setResultA(a, cf = Some(carry), pvf = Some(getParity(a))))
   }
 
   private def getParity(v: Integer): Boolean = {
@@ -280,7 +280,7 @@ trait ALU {
       val f5 = (v & 0x2000) != 0;
       val f3 = (v & 0x0800) != 0;
       val c = v > 0xFFFF;
-      r = registers.setResult16(v & 0x00FF, f5f = Some(f5), hf = Some(h), f3f = Some(f3), nf = Some(false), cf = Some(c))
+      r = registers.setResultHL(v & 0x00FF, f5f = Some(f5), hf = Some(h), f3f = Some(f3), nf = Some(false), cf = Some(c))
     }
     registers.copy(regFile1 = r, controlRegisters = cr)
   }
@@ -309,7 +309,6 @@ trait ALU {
     registers.copy(regFile1 = r)
   }
 
-
   // Instructions 0x80 -> 0x8F (B,C,D,E,H,L,(HL),A)
 
   // standard 8 bit add src,dst instrucitons
@@ -321,12 +320,30 @@ trait ALU {
     //
     val s = (raw & 0x80) != 0
     val z = v == 0
-    val h = ((src & 0x0F) + (registers.getA & 0x0F)) > 0x0F
+    val h = getHalfCarryFlagAdd(registers.getA, src)
     val pv = getOverflowFlagAdd(registers.getA, src)
     val n = false
     val c = raw > 0xFF
     //
-    registers.copy(regFile1 = registers.setResult8(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
+    registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
+    )
+  }
+
+  // standard 8 bit add src,dst with carry instrucitons
+  private def adc8(registers: Registers): Registers = {
+    val srcReg = registers.internalRegisters.z
+    val src = registers.getReg(reg8Bit(srcReg))
+    val raw = registers.getA + src + (if (registers.isC) 1 else 0)
+    val v = raw & 0xFF
+    //
+    val s = (raw & 0x80) != 0
+    val z = v == 0
+    val h = getHalfCarryFlagAdd(registers.getA, src, registers.isC)
+    val pv = getOverflowFlagAdd(registers.getA, src, registers.isC)
+    val n = false
+    val c = raw > 0xFF
+    //
+    registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
     )
   }
 
@@ -363,14 +380,28 @@ trait ALU {
     r.copy(regFile1 = r.setBaseReg16(RegNames.H, r.getReg16(RegNames.M16)))
   }
 
-  private def getOverflowFlagAdd(left: Int, right: Int): Boolean = {
+  /* pverflow flag control */
+  private def getOverflowFlagAdd(left: Int, right: Int, carry: Boolean): Boolean = {
     var l = left
     var r = right
     if (l > 127) l = l - 256
     if (r > 127) r = r - 256
     l = l + r
+    if (carry) l += 1
     (l < -128) || (l > 127)
   }
 
+  private def getOverflowFlagAdd(left: Int, right: Int): Boolean = {
+    getOverflowFlagAdd(left, right, carry = false)
+  }
+
+  /* half carry flag control */
+  private def getHalfCarryFlagAdd(left: Int, right: Int, carry: Boolean): Boolean = {
+    (left & 0x0F) + (right & 0x0F) + (if (carry) 1 else 0) > 0x0F
+  }
+
+  private def getHalfCarryFlagAdd(left: Int, right: Int): Boolean = {
+    getHalfCarryFlagAdd(left, right, carry = false)
+  }
 }
 
