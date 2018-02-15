@@ -58,16 +58,15 @@ trait ALU {
   private def general8BitALU(registers: Registers): Registers = {
     var r = registers
     r.internalRegisters.y match {
-      case 0 => add8(r) // flags ok
-      case 1 => adc8(r) // flags ok
-      case 2 => println("todo sub")
-      case 3 => println("todo sbc")
-      case 4 => println("todo and")
-      case 5 => println("todo xor")
-      case 6 => println("todo or")
-      case 7 => println("todo cp")
+      case 0 => addAdc8(r, adc = false) // flags ok
+      case 1 => addAdc8(r, adc = true) // flags ok
+      case 2 => subSbc8(r, sbc = false) // flags ok
+      case 3 => subSbc8(r, sbc = true) // flags ok
+      case 4 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r) // flags ok
+      case 5 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r) // flags ok
+      case 6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r) // flags ok
+      case 7 => cp8(r)
     }
-    r
   }
 
   // various block 0 jumps
@@ -187,16 +186,12 @@ trait ALU {
     // math - xyzzy - need to complete when 8 bit math added to alu
     //
     if (r.isN)
-      a = a - incr;
+      a = a - incr
     else
-      a = a + incr;
+      a = a + incr
     a = a & 0xFF
 
-    r.copy(regFile1 = r.setResultA(a, cf = Some(carry), pvf = Some(getParity(a))))
-  }
-
-  private def getParity(v: Integer): Boolean = {
-    false
+    r.copy(regFile1 = r.setResultA(a, cf = Some(carry), pvf = Some(getParityFlag(a))))
   }
 
   // ld registers,nn
@@ -277,9 +272,9 @@ trait ALU {
       val msb = (v & 0xFF00) >>> 8
       // sort out flags
       val h = (((hl & 0x0FFF) + (rr & 0x0FFF)) & 0xF000) != 0 // half carry in msb
-      val f5 = (v & 0x2000) != 0;
-      val f3 = (v & 0x0800) != 0;
-      val c = v > 0xFFFF;
+      val f5 = (v & 0x2000) != 0
+      val f3 = (v & 0x0800) != 0
+      val c = 0 != (v & 0xFFFF)
       r = registers.setResultHL(v & 0x00FF, f5f = Some(f5), hf = Some(h), f3f = Some(f3), nf = Some(false), cf = Some(c))
     }
     registers.copy(regFile1 = r, controlRegisters = cr)
@@ -311,37 +306,73 @@ trait ALU {
 
   // Instructions 0x80 -> 0x8F (B,C,D,E,H,L,(HL),A)
 
-  // standard 8 bit add src,dst instrucitons
-  private def add8(registers: Registers): Registers = {
+  // standard 8 bit add/adc src,dst instrucitons
+  private def addAdc8(registers: Registers, adc: Boolean): Registers = {
     val srcReg = registers.internalRegisters.z
     val src = registers.getReg(reg8Bit(srcReg))
-    val raw = registers.getA + src
+    val carry = adc && registers.isC
+    val raw = registers.getA + src + (if (carry) 1 else 0)
     val v = raw & 0xFF
     //
     val s = (raw & 0x80) != 0
     val z = v == 0
-    val h = getHalfCarryFlagAdd(registers.getA, src)
-    val pv = getOverflowFlagAdd(registers.getA, src)
+    val h = getHalfCarryFlagAdd(registers.getA, src, carry)
+    val pv = getOverflowFlagAdd(registers.getA, src, carry)
     val n = false
-    val c = raw > 0xFF
+    val c = 0 != (raw & 0xFF)
     //
     registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
     )
   }
 
-  // standard 8 bit add src,dst with carry instrucitons
-  private def adc8(registers: Registers): Registers = {
+  // standard 8 bit sub/sbc src,dst instrucitons
+  private def subSbc8(registers: Registers, sbc: Boolean): Registers = {
     val srcReg = registers.internalRegisters.z
     val src = registers.getReg(reg8Bit(srcReg))
-    val raw = registers.getA + src + (if (registers.isC) 1 else 0)
+    val carry = sbc && registers.isC
+    val raw = registers.getA - src - (if (carry) 1 else 0)
     val v = raw & 0xFF
     //
     val s = (raw & 0x80) != 0
     val z = v == 0
-    val h = getHalfCarryFlagAdd(registers.getA, src, registers.isC)
-    val pv = getOverflowFlagAdd(registers.getA, src, registers.isC)
+    val h = getHalfCarryFlagSub(registers.getA, src, carry)
+    val pv = getOverflowFlagSub(registers.getA, src, carry)
+    val n = true
+    val c = 0 != (raw & 0xFF)
+    //
+    registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
+    )
+  }
+
+  // standard 8 bit cp src,dst instrucitons
+  private def cp8(registers: Registers): Registers = {
+    val srcReg = registers.internalRegisters.z
+    val src = registers.getReg(reg8Bit(srcReg))
+    val raw = registers.getA - src
+    val v = raw & 0xFF
+    //
+    val s = (raw & 0x80) != 0
+    val z = v == 0
+    val h = getHalfCarryFlagSub(registers.getA, src, carry = false)
+    val pv = getOverflowFlagSub(registers.getA, src, carry = false)
+    val n = true
+    val c = 0 != (raw & 0xFF)
+    //
+    registers.copy(regFile1 = registers.setFlags(sf = Some(s), zf = Some(z), f5f = src.f5, hf = Some(h), f3f = src.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
+    )
+  }
+
+  // standard 8 bit and src,dst instrucitons
+  private def andOrXor8(registers: Registers, y: Int, h: Boolean, f: (Int, Int) => Int): Registers = {
+    val srcReg = registers.internalRegisters.z
+    val src = registers.getReg(reg8Bit(srcReg))
+    val v = f(registers.getA, src)
+    //
+    val s = (v & 0x80) != 0
+    val z = v == 0
+    val pv = getParityFlag(v)
     val n = false
-    val c = raw > 0xFF
+    val c = false
     //
     registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
     )
@@ -395,13 +426,33 @@ trait ALU {
     getOverflowFlagAdd(left, right, carry = false)
   }
 
+  /* 2's compliment overflow flag control */
+  private def getOverflowFlagSub(left: Int, right: Int, carry: Boolean): Boolean = {
+    var l = left
+    var r = right
+    if (l > 127) l = l - 256
+    if (r > 127) r = r - 256
+    l = l - r
+    if (carry) l -= 1
+    (l < -128) || (l > 127)
+  }
+
+  private def getOverflowFlagSub(left: Int, right: Int): Boolean = {
+    getOverflowFlagSub(left, right, carry = false)
+  }
+
   /* half carry flag control */
-  private def getHalfCarryFlagAdd(left: Int, right: Int, carry: Boolean): Boolean = {
+  private def getHalfCarryFlagAdd(left: Int, right: Int, carry: Boolean) = {
     (left & 0x0F) + (right & 0x0F) + (if (carry) 1 else 0) > 0x0F
   }
 
-  private def getHalfCarryFlagAdd(left: Int, right: Int): Boolean = {
-    getHalfCarryFlagAdd(left, right, carry = false)
+  private def getHalfCarryFlagSub(left: Int, right: Int, carry: Boolean): Boolean = {
+    (left & 0x0F) < ((right & 0x0F) + (if (carry) 1 else 0))
+  }
+
+  /* P/V calculation */
+  private def getParityFlag(v: Int): Boolean = {
+    false
   }
 }
 
