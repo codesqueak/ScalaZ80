@@ -21,6 +21,10 @@ package object CPUZ {
 
     def msb: Int = (v & 0x00FF00) >>> 8
 
+    def limit8: Int = v & 0xFF
+
+    def limit16: Int = v & 0xFFFF
+
     // flag status
     def f5: Option[Boolean] = Some((v & 0x20) != 0)
 

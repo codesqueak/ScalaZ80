@@ -31,6 +31,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
   // general getters
   def getPC: Int = controlRegisters.pc
 
+  def getSP: Int = controlRegisters.sp
+
   def getInst: Int = internalRegisters.inst
 
   def getA: Int = regFile1.a

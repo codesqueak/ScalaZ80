@@ -22,4 +22,16 @@ class Memory {
     ram((addr + 1) & 0xFFFF) = (wordVal & 0xFF00) >>> 8
   }
 
+  def getMemory16(addr: Int): Int = {
+    ram(addr) + ram((addr + 1) & 0xFFFF) << 8
+  }
+
+  def push(addr: Int, wordVal: Int): Unit = {
+    ram((addr - 1) & 0xFFFF) = (wordVal & 0xFF00) >>> 8
+    ram((addr - 2) & 0xFFFF) = wordVal & 0x00ff
+  }
+
+  def pop(addr: Int): Int = {
+    ram(addr + (ram((addr + 1) & 0xFFFF) << 8))
+  }
 }

@@ -25,7 +25,7 @@ trait ALU {
         case 0 => general0(r)
         case 1 => load8(r)
         case 2 => general8BitALU(r)
-        case 3 => println("todo 2")
+        case 3 => general3(r)
       }
     }
     r
@@ -54,7 +54,6 @@ trait ALU {
   // Instructions 0x80 -> 0xBF
   // Instructions 0x80 -> 0xBF
 
-  // instruction prefix 0
   private def general8BitALU(registers: Registers): Registers = {
     var r = registers
     r.internalRegisters.y match {
@@ -67,6 +66,25 @@ trait ALU {
       case 6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r) // flags ok
       case 7 => cp8(r)
     }
+  }
+
+  // Instructions 0xC0 -> 0xFF
+  // Instructions 0xC0 -> 0xFF
+  // Instructions 0xC0 -> 0xFF
+
+  private def general3(registers: Registers): Registers = {
+    var r = registers
+    r.internalRegisters.z match {
+      case 0 => retcc(r) // flags ok
+      case 1 => println("1")
+      case 2 => jpcc(r) // flags ok
+      case 3 => println("3")
+      case 4 => callcc(r) // flags ok
+      case 5 => println("5")
+      case 6 => println("6")
+      case 7 => rst(r) // flags ok
+    }
+    r
   }
 
   // various block 0 jumps
@@ -127,7 +145,7 @@ trait ALU {
   // rlca
   private def rlca(r: Registers): Registers = {
     val c = (r.getA & 0x80) > 0
-    var v = (r.getA << 1) & 0xFF
+    var v = (r.getA << 1).limit8
     if (c) v += 1
     r.copy(regFile1 = r.setResultA(v, cf = Some(c), f5f = v.f5, f3f = v.f3, hf = Some(false), nf = Some(false)))
   }
@@ -143,7 +161,7 @@ trait ALU {
   // rla
   private def rla(r: Registers): Registers = {
     val c = (r.getA & 0x80) > 0
-    var a = (r.getA << 1) & 0xFF
+    var a = (r.getA << 1).limit8
     if (r.isC) a += 1
     r.copy(regFile1 = r.setResultA(a, cf = Some(c), f5f = a.f5, f3f = a.f3, hf = Some(false), nf = Some(false)))
   }
@@ -189,7 +207,7 @@ trait ALU {
       a = a - incr
     else
       a = a + incr
-    a = a & 0xFF
+    a = a.limit8
 
     r.copy(regFile1 = r.setResultA(a, cf = Some(carry), pvf = Some(getParityFlag(a))))
   }
@@ -217,34 +235,30 @@ trait ALU {
   // inc registers
   private def inc8(registers: Registers): Registers = {
     val regName = reg8Bit(registers.p)
-    val v = (registers.getReg(regName) + 1) & 0xFF
-
+    val v = registers.getReg(regName).inc8
+    //
     val s = (v & 0x80) != 0
     val z = v == 0
-    val f5 = (v & 0x0F) == 0x0F
     val h = (v & 0x0F) == 0
-    val f3 = (v & 0x08) != 0
     val pv = v == 0x80
     val n = false
-
-    registers.copy(regFile1 = registers.setResult8(regName, v, sf = Some(s), zf = Some(z), f5f = Some(f5), hf = Some(h), f3f = Some(f3),
+    //
+    registers.copy(regFile1 = registers.setResult8(regName, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3,
       pvf = Some(pv), nf = Some(n)))
   }
 
   // dec registers
   private def dec8(registers: Registers): Registers = {
     val regName = reg8Bit(registers.p)
-    val v = (registers.getReg(regName) - 1) & 0xFF
-
+    val v = registers.getReg(regName).dec8
+    //
     val s = (v & 0x80) != 0
     val z = v == 0
-    val f5 = (v & 0x0F) == 0x0F
     val h = (v & 0x0F) == 0x0F
-    val f3 = (v & 0x08) != 0
     val pv = v == 0x80
     val n = true
-
-    registers.copy(regFile1 = registers.setResult8(regName, v, sf = Some(s), zf = Some(z), f5f = Some(f5), hf = Some(h), f3f = Some(f3),
+    //
+    registers.copy(regFile1 = registers.setResult8(regName, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3,
       pvf = Some(pv), nf = Some(n)))
   }
 
@@ -255,8 +269,8 @@ trait ALU {
     if (registers.internalRegisters.q == 0) {
       // LD rr,(mm)
       val v = r.m16
-      val lsb = v & 0x00FF
-      val msb = (v & 0xFF00) >>> 8
+      val lsb = v.lsb
+      val msb = v.msb
       registers.internalRegisters.p match {
         case 0 => r = r.copy(b = msb, c = lsb)
         case 1 => r = r.copy(d = msb, e = lsb)
@@ -268,14 +282,12 @@ trait ALU {
       val hl = registers.getReg16(RegNames.H)
       val rr = registers.getReg16(reg16Bit(registers.internalRegisters.p))
       val v = hl + rr
-      val lsb = v & 0x00FF
-      val msb = (v & 0xFF00) >>> 8
       // sort out flags
       val h = (((hl & 0x0FFF) + (rr & 0x0FFF)) & 0xF000) != 0 // half carry in msb
       val f5 = (v & 0x2000) != 0
       val f3 = (v & 0x0800) != 0
       val c = 0 != (v & 0xFFFF)
-      r = registers.setResultHL(v & 0x00FF, f5f = Some(f5), hf = Some(h), f3f = Some(f3), nf = Some(false), cf = Some(c))
+      r = registers.setResultHL(v.limit16, f5f = Some(f5), hf = Some(h), f3f = Some(f3), nf = Some(false), cf = Some(c))
     }
     registers.copy(regFile1 = r, controlRegisters = cr)
   }
@@ -312,7 +324,7 @@ trait ALU {
     val src = registers.getReg(reg8Bit(srcReg))
     val carry = adc && registers.isC
     val raw = registers.getA + src + (if (carry) 1 else 0)
-    val v = raw & 0xFF
+    val v = raw.limit8
     //
     val s = (raw & 0x80) != 0
     val z = v == 0
@@ -331,7 +343,7 @@ trait ALU {
     val src = registers.getReg(reg8Bit(srcReg))
     val carry = sbc && registers.isC
     val raw = registers.getA - src - (if (carry) 1 else 0)
-    val v = raw & 0xFF
+    val v = raw.limit8
     //
     val s = (raw & 0x80) != 0
     val z = v == 0
@@ -349,7 +361,7 @@ trait ALU {
     val srcReg = registers.internalRegisters.z
     val src = registers.getReg(reg8Bit(srcReg))
     val raw = registers.getA - src
-    val v = raw & 0xFF
+    val v = raw.limit8
     //
     val s = (raw & 0x80) != 0
     val z = v == 0
@@ -378,6 +390,40 @@ trait ALU {
     )
   }
 
+  // ret cc
+  private def retcc(registers: Registers): Registers = {
+    if (cc(registers.internalRegisters.y, registers)) {
+      val sp = registers.getSP
+      val addr = memory.pop(sp)
+      registers.copy(controlRegisters = registers.controlRegisters.copy(pc = addr, sp = (sp - 2).limit16))
+    }
+    else
+      registers
+  }
+
+  // jp cc
+  private def jpcc(registers: Registers): Registers = {
+    if (cc(registers.internalRegisters.y, registers))
+      jp(registers)
+    else
+      registers
+  }
+
+  // call cc
+  private def callcc(registers: Registers): Registers = {
+    if (cc(registers.internalRegisters.y, registers))
+      call(registers)
+    else
+      registers
+  }
+
+  // rst
+  private def rst(registers: Registers): Registers = {
+    val addr = registers.internalRegisters.y * 8
+    memory.push(registers.getSP, registers.getPC)
+    registers.copy(controlRegisters = registers.controlRegisters.copy(pc = addr, sp = (registers.getSP - 2).limit16))
+  }
+
   // helpers - helpers - helpers
   // helpers - helpers - helpers
   // helpers - helpers - helpers
@@ -386,13 +432,19 @@ trait ALU {
   private def jr(r: Registers): Registers = {
     var offset = r.getReg(RegNames.M8)
     if (offset > 0x007F) offset = offset - 0x0100
-    val pc = (r.getPC + offset) & 0xFFFF
+    val pc = (r.getPC + offset).limit16
     r.copy(controlRegisters = r.setPC(pc))
   }
 
   // absolute jump
   private def jp(r: Registers): Registers = {
     r.copy(controlRegisters = r.setPC(r.getReg(RegNames.M16)))
+  }
+
+  // absolute call
+  private def call(r: Registers): Registers = {
+    memory.push(r.getSP, r.getPC)
+    r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.M16), sp = r.getSP.limit16))
   }
 
   private def setMemory8fromA(r: Registers): Registers = {
@@ -453,6 +505,20 @@ trait ALU {
   /* P/V calculation */
   private def getParityFlag(v: Int): Boolean = {
     false
+  }
+
+  /* Standard condition codes */
+  private def cc(y: Int, flags: Registers): Boolean = {
+    y match {
+      case 0 => flags.isNZ
+      case 1 => flags.isZ
+      case 2 => flags.isNC
+      case 3 => flags.isC
+      case 4 => flags.isNPV
+      case 5 => flags.isPV
+      case 6 => flags.isNS
+      case 7 => flags.isS
+    }
   }
 }
 

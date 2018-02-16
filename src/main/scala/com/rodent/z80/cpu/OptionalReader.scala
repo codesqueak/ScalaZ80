@@ -28,6 +28,8 @@ trait OptionalReader {
       //
       case 2 => r
       //
+      case 3 if r.internalRegisters.z == 2 => loadImmediate16(r) // jp cc
+      case 3 if r.internalRegisters.z == 4 => loadImmediate16(r) // call cc
       case 3 => r
       //
       case _ => r
