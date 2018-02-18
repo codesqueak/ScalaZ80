@@ -8,7 +8,10 @@ class Ports() {
   def getPort(addr: Int): Int = 0
 
   def setPort(addr: Int, byteVal: Int): Unit = {
-    println(addr + " : " + new RichInt(byteVal).toHexString)
+    if (0 == addr)
+      println(byteVal.toChar)
+    else
+      println(addr + " : " + new RichInt(byteVal).toHexString)
   }
 
 }

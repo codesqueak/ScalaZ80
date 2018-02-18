@@ -25,11 +25,18 @@ trait OptionalReader {
       case 0 => r
       //
       case 1 if r.internalRegisters.z == atHL => load8atHL(r)
+      case 1 => r
       //
+      case 2 if r.internalRegisters.z == atHL => load8atHL(r)
       case 2 => r
       //
-      case 3 if r.internalRegisters.z == 2 => loadImmediate16(r) // jp cc
+      case 3 if r.internalRegisters.z == 2 => loadImmediate16(r) // jp cc nn
+      case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 0) => loadImmediate16(r) // jp nn
+      case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 2) => loadImmediate8(r) // out(n),a
+      case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 3) => loadImmediate8(r) // in a,(n)
       case 3 if r.internalRegisters.z == 4 => loadImmediate16(r) // call cc
+      case 3 if (r.internalRegisters.z == 5) && (r.internalRegisters.q == 1) && (r.internalRegisters.p == 0) => loadImmediate16(r) // call nn
+      case 3 if r.internalRegisters.z == 6 => loadImmediate8(r) // alu nn
       case 3 => r
       //
       case _ => r

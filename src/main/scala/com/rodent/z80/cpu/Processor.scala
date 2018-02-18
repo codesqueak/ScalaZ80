@@ -21,8 +21,15 @@ class Processor(m: Memory, p: Ports, var registers: Registers) extends Fetch wit
     }
   }
 
+  def run(addr: Int): Unit = {
+    registers = registers.copy(controlRegisters = registers.setPC(addr))
+    run()
+  }
+
+
   def dump(): Unit = {
     registers.dump()
   }
+
 
 }

@@ -1,7 +1,7 @@
 package com.rodent.z80.cpu
 
 import com.rodent.z80.CPUZ._
-import com.rodent.z80.io.Memory
+import com.rodent.z80.io.{Memory, Ports}
 
 import scala.language.implicitConversions
 
@@ -9,8 +9,12 @@ trait ALU {
 
   val reg8Bit = Map(0 -> RegNames.B, 1 -> RegNames.C, 2 -> RegNames.D, 3 -> RegNames.E, 4 -> RegNames.H, 5 -> RegNames.L, 6 -> RegNames.M8, 7 -> RegNames.A)
   val reg16Bit = Map(0 -> RegNames.B, 1 -> RegNames.D, 2 -> RegNames.H, 3 -> RegNames.SP)
+  val reg16Bit2 = Map(0 -> RegNames.B, 1 -> RegNames.D, 2 -> RegNames.H, 3 -> RegNames.A)
+
+  val nibbleParity = Array(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4)
 
   val memory: Memory
+  val ports: Ports
 
   def execute(registers: Registers): Registers = {
     // http://www.z80.info/decoding.htm
@@ -19,6 +23,7 @@ trait ALU {
     var r = registers
     if (r.internalRegisters.inst == 0x76) {
       // HALT processing (Interrupt flip flops etc)
+      r
     }
     else {
       registers.internalRegisters.x match {
@@ -28,7 +33,6 @@ trait ALU {
         case 3 => general3(r)
       }
     }
-    r
   }
 
   // Instructions 0x00 -> 0x3F
@@ -76,15 +80,66 @@ trait ALU {
     var r = registers
     r.internalRegisters.z match {
       case 0 => retcc(r) // flags ok
-      case 1 => println("1")
+      case 1 => variousExPop(r) // flags ok
       case 2 => jpcc(r) // flags ok
-      case 3 => println("3")
+      case 3 => variousJpExInOut(r) // flags ok
       case 4 => callcc(r) // flags ok
-      case 5 => println("5")
-      case 6 => println("6")
+      case 5 => variousPushCallSpecial(r) // flags ok
+      case 6 => general8BitALU(r) // flags ok
       case 7 => rst(r) // flags ok
     }
-    r
+  }
+
+  // various block 3, ex, pop etc
+  private def variousExPop(r: Registers): Registers = {
+    if (0 == r.internalRegisters.q) {
+      // pop
+      var rf1 = r.setBaseReg16(reg16Bit2(r.internalRegisters.p), memory.pop(r.getSP))
+      val cr = r.setSP((r.getSP + 2).limit16)
+      r.copy(regFile1 = rf1, controlRegisters = cr)
+    }
+    else
+      r.internalRegisters.p match {
+        case 0 => ret(r)
+        case 1 => r.copy(regFile1 = r.regFile2, regFile2 = r.regFile1) // exx
+        case 2 => r.copy(controlRegisters = r.setPC(r.getReg16(RegNames.H))) // jp HL
+        case 3 => r.copy(controlRegisters = r.setSP(r.getReg16(RegNames.H))) // ld sp,hl
+      }
+  }
+
+  // various block 3, jp,ex,in,out
+  private def variousJpExInOut(r: Registers): Registers = {
+    r.internalRegisters.y match {
+      case 0 => jp(r) // jp nn
+      case 1 => processCB(r)
+      case 2 => ports.setPort(r.regFile1.m8, r.getA)
+        r
+      case 3 => r.copy(regFile1 = r.regFile1.copy(a = 0, f = 0)) // xyzzy
+      case 4 => // ex (sp),hl
+        val temp = memory.pop(r.getSP)
+        memory.push((r.getSP + 2).limit16, r.getReg16(RegNames.H))
+        r.copy(regFile1 = r.setBaseReg16(RegNames.H, temp))
+      case 5 => r.copy(regFile1 = r.regFile1.copy(h = r.regFile1.d, l = r.regFile1.e, d = r.regFile1.h, e = r.regFile1.l)) // ex hl,de
+      case 6 => r // DI
+      case 7 => r // EI
+    }
+  }
+
+  // various block 3, pushCallSpecial
+  private def variousPushCallSpecial(r: Registers): Registers = {
+    if (0 == r.internalRegisters.q) {
+      // push
+      memory.push(r.getSP, r.getReg16(reg16Bit2(r.internalRegisters.p)))
+      val cr = r.setSP((r.getSP - 2).limit16)
+      r.copy(controlRegisters = cr)
+    }
+    else
+      r.internalRegisters.p match {
+        case 0 => call(r)
+        case 1 => processDD(r)
+        case 2 => processED(r)
+        case 3 => processFD(r)
+      }
   }
 
   // various block 0 jumps
@@ -103,9 +158,13 @@ trait ALU {
         if (0 != b) jr(r) else r
       case 3 => jr(r) // jr d
       case 4 if r.isNZ => jr(r) // jr nz d
+      case 4 => r
       case 5 if r.isZ => jr(r) // jr z d
+      case 5 => r
       case 6 if r.isNC => jr(r) // jr nc d
+      case 6 => r
       case 7 if r.isC => jr(r) // jr c d
+      case 7 => r
     }
   }
 
@@ -201,15 +260,34 @@ trait ALU {
     var carry = r.isC
     if (a > 0x99) carry = true
     //
-    // math - xyzzy - need to complete when 8 bit math added to alu
-    //
-    if (r.isN)
-      a = a - incr
-    else
-      a = a + incr
-    a = a.limit8
-
-    r.copy(regFile1 = r.setResultA(a, cf = Some(carry), pvf = Some(getParityFlag(a))))
+    if (r.isN) {
+      // sub
+      val raw = r.getA - incr
+      val v = raw.limit8
+      //
+      val s = (raw & 0x80) != 0
+      val z = v == 0
+      val h = getHalfCarryFlagSub(r.getA, incr, carry = false)
+      val pv = getOverflowFlagSub(r.getA, incr, carry = false)
+      val n = true
+      val c = 0 != (raw & 0xFF)
+      //
+      r.copy(regFile1 = r.setResultA(a, cf = Some(carry), pvf = Some(getParityFlag(v))))
+    }
+    else {
+      // add
+      val raw = r.getA + incr
+      val v = raw.limit8
+      //
+      val s = (raw & 0x80) != 0
+      val z = v == 0
+      val h = getHalfCarryFlagAdd(r.getA, incr, carry = false)
+      val pv = getOverflowFlagAdd(r.getA, incr, carry = false)
+      val n = false
+      val c = 0 != (raw & 0xFF)
+      //
+      r.copy(regFile1 = r.setResultA(a, sf = Some(s), zf = Some(z), hf = Some(h), nf = Some(n), f3f = v.f3, f5f = v.f5, cf = Some(carry), pvf = Some(getParityFlag(v))))
+    }
   }
 
   // ld registers,nn
@@ -316,8 +394,6 @@ trait ALU {
     registers.copy(regFile1 = r)
   }
 
-  // Instructions 0x80 -> 0x8F (B,C,D,E,H,L,(HL),A)
-
   // standard 8 bit add/adc src,dst instrucitons
   private def addAdc8(registers: Registers, adc: Boolean): Registers = {
     val srcReg = registers.internalRegisters.z
@@ -393,12 +469,17 @@ trait ALU {
   // ret cc
   private def retcc(registers: Registers): Registers = {
     if (cc(registers.internalRegisters.y, registers)) {
-      val sp = registers.getSP
-      val addr = memory.pop(sp)
-      registers.copy(controlRegisters = registers.controlRegisters.copy(pc = addr, sp = (sp - 2).limit16))
+      ret(registers)
     }
     else
       registers
+  }
+
+  // ret
+  private def ret(registers: Registers): Registers = {
+    val sp = registers.getSP
+    val addr = memory.pop(sp)
+    registers.copy(controlRegisters = registers.controlRegisters.copy(pc = addr, sp = (sp + 2).limit16))
   }
 
   // jp cc
@@ -424,10 +505,6 @@ trait ALU {
     registers.copy(controlRegisters = registers.controlRegisters.copy(pc = addr, sp = (registers.getSP - 2).limit16))
   }
 
-  // helpers - helpers - helpers
-  // helpers - helpers - helpers
-  // helpers - helpers - helpers
-
   // relative jump
   private def jr(r: Registers): Registers = {
     var offset = r.getReg(RegNames.M8)
@@ -444,8 +521,41 @@ trait ALU {
   // absolute call
   private def call(r: Registers): Registers = {
     memory.push(r.getSP, r.getPC)
-    r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.M16), sp = r.getSP.limit16))
+    r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.M16), sp = (r.getSP - 2).limit16))
   }
+
+  // CB - Bit twiddling
+  // CB - Bit twiddling
+  // CB - Bit twiddling
+
+  private def processCB(r: Registers): Registers = {
+    r
+  }
+
+  // DD - IX twiddling
+  // DD - IX twiddling
+  // DD - IX twiddling
+  private def processDD(r: Registers): Registers = {
+    r
+  }
+
+  // FD - IY twiddling
+  // FD - IY twiddling
+  // FD - IY twiddling
+  private def processFD(r: Registers): Registers = {
+    r
+  }
+
+  // ED - Weird twiddling
+  // ED - Weird twiddling
+  // ED - Weird twiddling
+  private def processED(r: Registers): Registers = {
+    r
+  }
+
+  // helpers - helpers - helpers
+  // helpers - helpers - helpers
+  // helpers - helpers - helpers
 
   private def setMemory8fromA(r: Registers): Registers = {
     r.copy(regFile1 = r.setBaseReg(RegNames.M8, r.getReg(RegNames.A)))
@@ -463,6 +573,10 @@ trait ALU {
     r.copy(regFile1 = r.setBaseReg16(RegNames.H, r.getReg16(RegNames.M16)))
   }
 
+  private def getOverflowFlagAdd(left: Int, right: Int): Boolean = {
+    getOverflowFlagAdd(left, right, carry = false)
+  }
+
   /* pverflow flag control */
   private def getOverflowFlagAdd(left: Int, right: Int, carry: Boolean): Boolean = {
     var l = left
@@ -474,8 +588,8 @@ trait ALU {
     (l < -128) || (l > 127)
   }
 
-  private def getOverflowFlagAdd(left: Int, right: Int): Boolean = {
-    getOverflowFlagAdd(left, right, carry = false)
+  private def getOverflowFlagSub(left: Int, right: Int): Boolean = {
+    getOverflowFlagSub(left, right, carry = false)
   }
 
   /* 2's compliment overflow flag control */
@@ -489,10 +603,6 @@ trait ALU {
     (l < -128) || (l > 127)
   }
 
-  private def getOverflowFlagSub(left: Int, right: Int): Boolean = {
-    getOverflowFlagSub(left, right, carry = false)
-  }
-
   /* half carry flag control */
   private def getHalfCarryFlagAdd(left: Int, right: Int, carry: Boolean) = {
     (left & 0x0F) + (right & 0x0F) + (if (carry) 1 else 0) > 0x0F
@@ -504,7 +614,8 @@ trait ALU {
 
   /* P/V calculation */
   private def getParityFlag(v: Int): Boolean = {
-    false
+    val count = nibbleParity(v & 0x0F) + +nibbleParity((v & 0xF) >>> 4)
+    0 == (count & 0x01)
   }
 
   /* Standard condition codes */

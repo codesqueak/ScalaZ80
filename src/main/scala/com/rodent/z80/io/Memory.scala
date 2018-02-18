@@ -5,7 +5,7 @@ class Memory {
   private val ram = Array.fill[Int](65536)(0x76)
 
   // load a pattern into memory
-  def setMemory(b: Int*): Unit = {
+  def setMemory(b: Array[Int]): Unit = {
     var addr = 0
     for (elem <- b) {
       setMemory(addr, elem)
