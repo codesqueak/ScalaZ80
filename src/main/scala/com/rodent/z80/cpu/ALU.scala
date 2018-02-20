@@ -13,6 +13,10 @@ trait ALU {
 
   val nibbleParity = Array(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4)
 
+  val testBit = Array(0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80)
+
+  val resetBit: Array[Int] = testBit.map(x => x ^ 0xFF)
+
   val memory: Memory
   val ports: Ports
 
@@ -26,11 +30,23 @@ trait ALU {
       r
     }
     else {
-      registers.internalRegisters.x match {
-        case 0 => general0(r)
-        case 1 => load8(r)
-        case 2 => general8BitALU(r)
-        case 3 => general3(r)
+      // execute the instruction
+      if (registers.internalRegisters.cb) {
+        r = executeCB(r)
+        r.copy(internalRegisters = registers.internalRegisters.copy(cb = false))
+      } else if (registers.internalRegisters.dd) {
+        r.copy(internalRegisters = registers.internalRegisters.copy(dd = false))
+      } else if (registers.internalRegisters.ed) {
+        r.copy(internalRegisters = registers.internalRegisters.copy(ed = false))
+      } else if (registers.internalRegisters.fd) {
+        r.copy(internalRegisters = registers.internalRegisters.copy(fd = false))
+      } else {
+        registers.internalRegisters.x match {
+          case 0 => general0(r)
+          case 1 => load8(r)
+          case 2 => general8BitALU(r)
+          case 3 => general3(r)
+        }
       }
     }
   }
@@ -111,7 +127,7 @@ trait ALU {
   private def variousJpExInOut(r: Registers): Registers = {
     r.internalRegisters.y match {
       case 0 => jp(r) // jp nn
-      case 1 => processCB(r)
+      case 1 => r.copy(internalRegisters = r.internalRegisters.copy(cb = true))
       case 2 => ports.setPort(r.regFile1.m8, r.getA)
         r
       case 3 => r.copy(regFile1 = r.regFile1.copy(a = 0, f = 0)) // xyzzy
@@ -136,9 +152,9 @@ trait ALU {
     else
       r.internalRegisters.p match {
         case 0 => call(r)
-        case 1 => processDD(r)
-        case 2 => processED(r)
-        case 3 => processFD(r)
+        case 1 => r.copy(internalRegisters = r.internalRegisters.copy(dd = true))
+        case 2 => r.copy(internalRegisters = r.internalRegisters.copy(ed = true))
+        case 3 => r.copy(internalRegisters = r.internalRegisters.copy(fd = true))
       }
   }
 
@@ -524,34 +540,46 @@ trait ALU {
     r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.M16), sp = (r.getSP - 2).limit16))
   }
 
-  // CB - Bit twiddling
-  // CB - Bit twiddling
-  // CB - Bit twiddling
+  // Execute CB prefix
+  // Execute CB prefix
+  // Execute CB prefix
 
-  private def processCB(r: Registers): Registers = {
-    r
+  private def executeCB(r: Registers): Registers = {
+    r.internalRegisters.x match {
+      case 0 => // rot[y] r[z]
+        r.internalRegisters.y match {
+          case 0 => r // rlc
+          case 1 => r // rrc
+          case 2 => r // rl
+          case 3 => r // rr
+          case 4 => r // sla
+          case 5 => r // sra
+          case 6 => r // SLL
+          case 7 => r // SRL
+        }
+      case 1 => // BIT y, r[z]
+        val v = r.getReg(reg8Bit(r.internalRegisters.z))
+        val z = 0 == (v & testBit(r.internalRegisters.y))
+        var s = false
+        if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
+        r.copy(regFile1 = r.setFlags(sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
+      case 2 => // RES y, r[z]
+        val reg = reg8Bit(r.internalRegisters.z)
+        val v = r.getReg(reg) & resetBit(r.internalRegisters.y)
+        val z = 0 == v
+        var s = false
+        if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
+        r.copy(regFile1 = r.setResult8(reg, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
+      case 3 => // SET y, r[z]
+        val reg = reg8Bit(r.internalRegisters.z)
+        val v = r.getReg(reg) | testBit(r.internalRegisters.y)
+        val z = 0 == v
+        var s = false
+        if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
+        r.copy(regFile1 = r.setResult8(reg, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
+    }
   }
 
-  // DD - IX twiddling
-  // DD - IX twiddling
-  // DD - IX twiddling
-  private def processDD(r: Registers): Registers = {
-    r
-  }
-
-  // FD - IY twiddling
-  // FD - IY twiddling
-  // FD - IY twiddling
-  private def processFD(r: Registers): Registers = {
-    r
-  }
-
-  // ED - Weird twiddling
-  // ED - Weird twiddling
-  // ED - Weird twiddling
-  private def processED(r: Registers): Registers = {
-    r
-  }
 
   // helpers - helpers - helpers
   // helpers - helpers - helpers

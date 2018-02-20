@@ -67,7 +67,6 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.R => Some(controlRegisters.r)
       case RegNames.M16 => Some(regFile1.m16)
       case RegNames.INST => Some(internalRegisters.inst)
-      case RegNames.ADDR => Some(internalRegisters.addr)
       case _ => None
     }
   }
@@ -88,7 +87,6 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.PC => controlRegisters.pc
       case RegNames.SP => controlRegisters.sp
       case RegNames.M16 => regFile1.m16
-      case RegNames.ADDR => internalRegisters.addr
     }
   }
 
@@ -103,7 +101,6 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.PC => controlRegisters.pc
       case RegNames.SP => controlRegisters.sp
       case RegNames.M16 => regFile2.m16
-      case RegNames.ADDR => internalRegisters.addr
     }
   }
 
@@ -146,7 +143,6 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def setInternalReg(reg: RegName, v: Int): InternalRegisters = {
     reg match {
-      case RegNames.ADDR => internalRegisters.copy(addr = v)
       case RegNames.X => internalRegisters.copy(x = v)
       case RegNames.Y => internalRegisters.copy(y = v)
       case RegNames.Z => internalRegisters.copy(z = v)
