@@ -548,14 +548,50 @@ trait ALU {
     r.internalRegisters.x match {
       case 0 => // rot[y] r[z]
         r.internalRegisters.y match {
-          case 0 => r // rlc
-          case 1 => r // rrc
-          case 2 => r // rl
-          case 3 => r // rr
+          case 0 => // rlc
+            val reg = reg8Bit(r.internalRegisters.z)
+            var v = r.getReg(reg) << 1
+            val c = (v & 0xFF00) != 0
+            if (c) v = v | 0x01
+            v = v.limit8
+            val s = (v & 0x80) != 0
+            val z = v == 0
+            val pv = this.getParityFlag(v)
+            r.copy(regFile1 = r.setResult8(reg, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(false), f3f = v.f3, pvf = Some(pv), nf = Some(false), cf = Some(c)))
+          case 1 => // rrc
+            val reg = reg8Bit(r.internalRegisters.z)
+            var v = r.getReg(reg)
+            val c = (v & 0x01) != 0
+            v = v >>> 1
+            if (c) v = v | 0x80
+            val s = c
+            val z = v == 0
+            val pv = this.getParityFlag(v)
+            r.copy(regFile1 = r.setResult8(reg, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(false), f3f = v.f3, pvf = Some(pv), nf = Some(false), cf = Some(c)))
+          case 2 => // rl
+            val reg = reg8Bit(r.internalRegisters.z)
+            var v = r.getReg(reg) << 1
+            if (r.isC) v = v | 0x01
+            val c = (v & 0xFF00) != 0
+            v = v.limit8
+            val s = (v & 0x80) != 0
+            val z = v == 0
+            val pv = this.getParityFlag(v)
+            r.copy(regFile1 = r.setResult8(reg, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(false), f3f = v.f3, pvf = Some(pv), nf = Some(false), cf = Some(c)))
+          case 3 => // rr
+            val reg = reg8Bit(r.internalRegisters.z)
+            var v = r.getReg(reg)
+            val c = (v & 0x01) != 0
+            v = v >>> 1
+            if (r.isC) v = v | 0x80
+            val s = c
+            val z = v == 0
+            val pv = this.getParityFlag(v)
+            r.copy(regFile1 = r.setResult8(reg, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(false), f3f = v.f3, pvf = Some(pv), nf = Some(false), cf = Some(c)))
           case 4 => r // sla
           case 5 => r // sra
-          case 6 => r // SLL
-          case 7 => r // SRL
+          case 6 => r // sll
+          case 7 => r // srl
         }
       case 1 => // BIT y, r[z]
         val v = r.getReg(reg8Bit(r.internalRegisters.z))
