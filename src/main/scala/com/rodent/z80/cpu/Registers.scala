@@ -48,6 +48,11 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def q: Int = internalRegisters.q
 
+  def dd: Boolean = internalRegisters.dd
+
+  def fd: Boolean = internalRegisters.fd
+
+
   // reg get
   private def getSafeReg(reg: RegName): Option[Int] = {
     reg match {
@@ -81,6 +86,22 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.A => (regFile1.a << 8) + regFile1.f
       case RegNames.B => (regFile1.b << 8) + regFile1.c
       case RegNames.D => (regFile1.d << 8) + regFile1.e
+      case RegNames.H => (regFile1.h << 8) + regFile1.l
+      case RegNames.IX => indexRegisters.ix
+      case RegNames.IY => indexRegisters.iy
+      case RegNames.PC => controlRegisters.pc
+      case RegNames.SP => controlRegisters.sp
+      case RegNames.M16 => regFile1.m16
+    }
+  }
+
+  def getReg16Index(reg: RegName): Int = {
+    reg match {
+      case RegNames.A => (regFile1.a << 8) + regFile1.f
+      case RegNames.B => (regFile1.b << 8) + regFile1.c
+      case RegNames.D => (regFile1.d << 8) + regFile1.e
+      case RegNames.H if internalRegisters.dd => indexRegisters.ix
+      case RegNames.H if internalRegisters.fd => indexRegisters.iy
       case RegNames.H => (regFile1.h << 8) + regFile1.l
       case RegNames.IX => indexRegisters.ix
       case RegNames.IY => indexRegisters.iy
@@ -265,6 +286,16 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                  ): BaseRegisters = {
     val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(h = (v & 0xFF00) >> 8, l = v & 0x00FF, f = flags)
+  }
+
+  // set IX
+  def setResultIX(v: Int): IndexRegisters = {
+    indexRegisters.copy(ix = v)
+  }
+
+  // set IY
+  def setResultIY(v: Int): IndexRegisters = {
+    indexRegisters.copy(iy = v)
   }
 
   private def fixFlags(sf: Option[Boolean], zf: Option[Boolean], f5f: Option[Boolean], hf: Option[Boolean], f3f: Option[Boolean], pvf: Option[Boolean], nf: Option[Boolean], cf: Option[Boolean]) = {

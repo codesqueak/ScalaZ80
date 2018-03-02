@@ -17,6 +17,21 @@ trait OptionalReader {
       else
         r
     }
+    if (r.internalRegisters.dd || r.internalRegisters.fd) {
+      r.internalRegisters.x match {
+        case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r) // LD IXIY,NN
+        case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD IXIY, (nn)
+        case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // inc (ixiy)
+        case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // dec (ixiy)
+        case 0 if r.internalRegisters.z == 6 => loadImmediate8IXIY(r) // ld (ixiy+dd),n
+        //
+        case 1 if r.internalRegisters.z == atHL => load8atIXIY(r)
+        //
+        case 2 if r.internalRegisters.z == atHL => load8atIXIY(r)
+        //
+        case _ => r
+      }
+    }
     else {
       r.internalRegisters.x match {
         case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r)
@@ -57,6 +72,20 @@ trait OptionalReader {
     registers.copy(regFile1 = br)
   }
 
+  // Load byte at (IXIY+dd)
+  // save calculated address into m16
+  private def load8atIXIY(registers: Registers): Registers = {
+    val r = loadImmediate8(registers) // get dd offset
+    var addr = r.getReg(RegNames.M8)
+    if (addr > 127) addr = addr - 256
+    if (r.internalRegisters.dd)
+      addr = (r.getReg16(RegNames.IX) + addr).limit16
+    else
+      addr = (r.getReg16(RegNames.IY) + addr).limit16
+    val rf1 = r.regFile1.copy(m8 = memory.getMemory(addr), m16 = addr)
+    r.copy(regFile1 = rf1)
+  }
+
   // Load byte at (BC)
   private def load8atBC(registers: Registers): Registers = {
     val br = registers.regFile1.copy(m8 = memory.getMemory(registers.getReg16(RegNames.B)))
@@ -90,6 +119,20 @@ trait OptionalReader {
     val rf1 = registers.regFile1.copy(m8 = v)
     val cr = registers.controlRegisters.copy(pc = addr.inc16)
     registers.copy(controlRegisters = cr, regFile1 = rf1)
+  }
+
+  // Load 8 bit value following instruction
+  // save calculated target address into m16
+  private def loadImmediate8IXIY(registers: Registers): Registers = {
+    val r = loadImmediate8(registers) // get dd offset
+    var addr = r.getReg(RegNames.M8)
+    if (addr > 127) addr = addr - 256
+    if (r.internalRegisters.dd)
+      addr = (r.getReg16(RegNames.IX) + addr).limit16
+    else
+      addr = (r.getReg16(RegNames.IY) + addr).limit16
+    r.copy(regFile1 = r.regFile1.copy(m16 = addr))
+    loadImmediate8(r) // get n
   }
 
   // Load 16 bit value following instruction
