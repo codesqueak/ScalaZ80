@@ -13,7 +13,7 @@ class BasicTest extends FlatSpec with Matchers {
     //
     for (line <- lines) {
       if (line.length > 1) {
-        println("Loading: " + line)
+        //    println("Loading: " + line)
         val parts = line.split(" ")
         val base = Integer.parseInt(parts(0), 16)
         for (i <- 0 to 7) memory.setMemory(base + i, Integer.parseInt(parts(i + 1), 16))

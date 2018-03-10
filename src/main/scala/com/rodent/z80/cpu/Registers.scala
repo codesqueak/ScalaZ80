@@ -136,6 +136,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.H => regFile1.copy(h = v)
       case RegNames.L => regFile1.copy(l = v)
       case RegNames.M8 => regFile1.copy(m8 = v)
+      case RegNames.M16 => regFile1.copy(m16 = v)
     }
   }
 
@@ -238,7 +239,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                nf: Option[Boolean] = None,
                cf: Option[Boolean] = None
               ): BaseRegisters = {
-    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
+    val flags = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(f = flags)
   }
 
@@ -254,7 +255,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                  nf: Option[Boolean] = None,
                  cf: Option[Boolean] = None
                 ): BaseRegisters = {
-    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
+    val flags = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     setBaseReg(reg, v).copy(f = flags)
   }
 
@@ -269,7 +270,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                  nf: Option[Boolean] = None,
                  cf: Option[Boolean] = None
                 ): BaseRegisters = {
-    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
+    val flags = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(a = v, f = flags)
   }
 
@@ -284,7 +285,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                   nf: Option[Boolean] = None,
                   cf: Option[Boolean] = None
                  ): BaseRegisters = {
-    val flags: Int = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
+    val flags = fixFlags(sf, zf, f5f, hf, f3f, pvf, nf, cf)
     regFile1.copy(h = (v & 0xFF00) >> 8, l = v & 0x00FF, f = flags)
   }
 
@@ -298,16 +299,16 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
     indexRegisters.copy(iy = v)
   }
 
-  private def fixFlags(sf: Option[Boolean], zf: Option[Boolean], f5f: Option[Boolean], hf: Option[Boolean], f3f: Option[Boolean], pvf: Option[Boolean], nf: Option[Boolean], cf: Option[Boolean]) = {
+  private def fixFlags(sf: Option[Boolean], zf: Option[Boolean], f5f: Option[Boolean], hf: Option[Boolean], f3f: Option[Boolean], pvf: Option[Boolean], nf: Option[Boolean], cf: Option[Boolean]): Int = {
     var flags = regFile1.f
-    sf.map(if (_) flags | s else flags & ns).getOrElse(flags)
-    zf.map(if (_) flags | z else flags & nz).getOrElse(flags)
-    f5f.map(if (_) flags | f5 else flags & nf5).getOrElse(flags)
-    hf.map(if (_) flags | h else flags & nh).getOrElse(flags)
-    f3f.map(if (_) flags | f3 else flags & nf3).getOrElse(flags)
-    pvf.map(if (_) flags | pv else flags & npv).getOrElse(flags)
-    nf.map(if (_) flags | n else flags & nn).getOrElse(flags)
-    cf.map(if (_) flags | c else flags & nc).getOrElse(flags)
+    flags = sf.map(if (_) flags | s else flags & ns).getOrElse(flags)
+    flags = zf.map(if (_) flags | z else flags & nz).getOrElse(flags)
+    flags = f5f.map(if (_) flags | f5 else flags & nf5).getOrElse(flags)
+    flags = hf.map(if (_) flags | h else flags & nh).getOrElse(flags)
+    flags = f3f.map(if (_) flags | f3 else flags & nf3).getOrElse(flags)
+    flags = pvf.map(if (_) flags | pv else flags & npv).getOrElse(flags)
+    flags = nf.map(if (_) flags | n else flags & nn).getOrElse(flags)
+    flags = cf.map(if (_) flags | c else flags & nc).getOrElse(flags)
     flags
   }
 

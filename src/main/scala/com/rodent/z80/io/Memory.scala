@@ -27,11 +27,14 @@ class Memory {
   }
 
   def push(addr: Int, wordVal: Int): Unit = {
+    //    println("push: " + Utils.toHex16(wordVal) + " @ " + Utils.toHex16(addr))
     ram((addr - 1) & 0xFFFF) = (wordVal & 0xFF00) >>> 8
     ram((addr - 2) & 0xFFFF) = wordVal & 0x00ff
   }
 
   def pop(addr: Int): Int = {
-    ram(addr + (ram((addr + 1) & 0xFFFF) << 8))
+    val v = ram(addr) + (ram((addr + 1) & 0xFFFF) << 8)
+    //  println("pop: " + Utils.toHex16(v) + " @ " + Utils.toHex16(addr))
+    v
   }
 }

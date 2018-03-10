@@ -9,7 +9,11 @@ class Ports() {
 
   def setPort(addr: Int, byteVal: Int): Unit = {
     if (0 == addr)
-      println(byteVal.toChar)
+      if (byteVal < 32) println
+      else if (byteVal > 128)
+        println("weird")
+      else
+        print(byteVal.toChar)
     else
       println(addr + " : " + new RichInt(byteVal).toHexString)
   }

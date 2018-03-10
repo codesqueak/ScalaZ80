@@ -34,23 +34,17 @@ trait ALU {
     else {
       // execute the instruction
       if (registers.internalRegisters.cb) {
-        r = executeCB(r)
-        r.copy(internalRegisters = registers.internalRegisters.copy(cb = false))
+        executeCB(r)
       } else if (registers.internalRegisters.dd) {
-        r = executeDDFD(r)
-        r.copy(internalRegisters = registers.internalRegisters.copy(dd = false))
+        executeDDFD(r)
       } else if (registers.internalRegisters.ed) {
-        r = executeED(r)
-        r.copy(internalRegisters = registers.internalRegisters.copy(ed = false))
+        executeED(r)
       } else if (registers.internalRegisters.fd) {
-        r = executeDDFD(r)
-        r.copy(internalRegisters = registers.internalRegisters.copy(fd = false))
+        executeDDFD(r)
       } else if (registers.internalRegisters.ddcb) {
-        r = executeDDFDCB(r)
-        r.copy(internalRegisters = registers.internalRegisters.copy(ddcb = false))
+        executeDDFDCB(r)
       } else if (registers.internalRegisters.fdcb) {
-        r = executeDDFDCB(r)
-        r.copy(internalRegisters = registers.internalRegisters.copy(fdcb = false))
+        executeDDFDCB(r)
       } else {
         registers.internalRegisters.x match {
           case 0 => general0(r)
@@ -92,8 +86,8 @@ trait ALU {
       case 2 => subSbc8(r, sbc = false) // flags ok
       case 3 => subSbc8(r, sbc = true) // flags ok
       case 4 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r) // flags ok
-      case 5 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r) // flags ok
-      case 6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r) // flags ok
+      case 5 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r) // flags ok
+      case 6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r) // flags ok
       case 7 => cp8(r)
     }
   }
@@ -322,7 +316,7 @@ trait ALU {
 
   // ld registers,nn
   private def ldImmediate8(r: Registers): Registers = {
-    val regName = reg8Bit(r.p)
+    val regName = reg8Bit(r.internalRegisters.y)
     r.copy(regFile1 = r.setBaseReg(regName, r.getReg(RegNames.M8)))
   }
 
@@ -344,7 +338,7 @@ trait ALU {
 
   // inc registers
   private def inc8(registers: Registers): Registers = {
-    val regName = reg8Bit(registers.p)
+    val regName = reg8Bit(registers.internalRegisters.y)
     val v = registers.getReg(regName).inc8
     //
     val s = (v & 0x80) != 0
@@ -359,7 +353,7 @@ trait ALU {
 
   // dec registers
   private def dec8(registers: Registers): Registers = {
-    val regName = reg8Bit(registers.p)
+    val regName = reg8Bit(registers.internalRegisters.y)
     val v = registers.getReg(regName).dec8
     //
     val s = (v & 0x80) != 0
@@ -518,6 +512,7 @@ trait ALU {
 
   // ret
   private def ret(registers: Registers): Registers = {
+    //   println("return sp:" + Utils.toHex16(registers.getSP))
     val sp = registers.getSP
     val addr = memory.pop(sp)
     registers.copy(controlRegisters = registers.controlRegisters.copy(pc = addr, sp = (sp + 2).limit16))
@@ -561,6 +556,7 @@ trait ALU {
 
   // absolute call
   private def call(r: Registers): Registers = {
+    //   println("call from " + Utils.toHex16(r.getPC) + " to " + Utils.toHex16(r.getReg(RegNames.M16)) + " sp:" + Utils.toHex16(r.getSP))
     memory.push(r.getSP, r.getPC)
     r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.M16), sp = (r.getSP - 2).limit16))
   }
@@ -717,6 +713,11 @@ trait ALU {
       case 0xAE => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r)
       case 0xB6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r)
       case 0xBE => cp8(r)
+      case 0xCB => // switch to dd cb or fd cb mode
+        if (r.internalRegisters.dd)
+          r.copy(internalRegisters = r.internalRegisters.copy(dd = false, ddcb = true))
+        else
+          r.copy(internalRegisters = r.internalRegisters.copy(fd = false, fdcb = true))
       //
       case 0xE1 => //pop
         var v = memory.pop(r.getSP)
@@ -762,12 +763,75 @@ trait ALU {
   // Execute ED prefix
   // Execute ED prefix
 
-  private def executeED(r: Registers): Registers = {
-    r.internalRegisters.inst match {
+  private def ldi(r: Registers): BaseRegisters = {
+    val hl = r.getReg16(RegNames.H).inc16
+    val target = r.getReg16(RegNames.D)
+    val de = target.inc16
+    val bc = r.getReg16(RegNames.B).dec16
+    var flags = r.getReg(RegNames.F) & 0xC1 // f5=0,h=0,f3=0,pv=0,n=0
+    var f5f3 = (r.getA + r.getReg(RegNames.M16)).limit8 & 0x28 // f5,f33
+    flags = flags | f5f3
+    if (bc != 0) flags = flags | 0x04
+    r.regFile1.copy(f = flags, a = r.getReg(RegNames.M8), h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, m16 = target)
+  }
 
+
+  private def ldd(r: Registers): BaseRegisters = {
+    val hl = r.getReg16(RegNames.H).dec16
+    val de = r.getReg16(RegNames.D).dec16
+    val bc = r.getReg16(RegNames.B).dec16
+    var flags = r.getReg(RegNames.F) & 0xC1 // f5=0,h=0,f3=0,pv=0,n=0
+    var f5f3 = (r.getA + r.getReg(RegNames.M16)).limit8 & 0x28 // f5,f33
+    flags = flags | f5f3
+    if (bc != 0) flags = flags | 0x04
+    r.regFile1.copy(f = flags, a = r.getReg(RegNames.M8), h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb)
+  }
+
+  private def executeED(r: Registers): Registers = {
+    if (1 == r.internalRegisters.x)
+      executeEDBlock1(r)
+    else
+      r.internalRegisters.inst match {
+        case 0xA0 => r.copy(regFile1 = ldi(r)) // LDI
+        case 0xA8 => r.copy(regFile1 = ldd(r)) // LDD
+        case 0xB0 => { // LDIR
+          val rf1 = ldi(r)
+          if ((0 != rf1.b) || (0 != rf1.c))
+            r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
+          else
+            r.copy(regFile1 = rf1)
+        }
+        case 0xB8 => { // LDDR
+          val rf1 = ldi(r)
+          if ((0 != rf1.b) || (0 != rf1.c))
+            r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
+          else
+            r.copy(regFile1 = rf1)
+        }
+        //
+        case _ => throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (ed): " + Utils.toHex8(r.internalRegisters.inst))
+      }
+  }
+
+  private def executeEDBlock1(r: Registers): Registers = {
+    r.internalRegisters.z match {
+      case 3 => //
+        if (r.internalRegisters.q == 0) {
+          memory.setMemory16(r.getReg16(RegNames.M16), r.getReg16(reg16Bit(r.internalRegisters.p)))
+          r
+        }
+        else {
+          val v = r.getReg16(RegNames.M16)
+          if (r.internalRegisters.p == 3) // sp
+            r.copy(controlRegisters = r.setSP(v))
+          else
+            r.copy(regFile1 = r.setBaseReg16(reg16Bit(r.internalRegisters.p), v))
+        }
+      //
       case _ => throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (ed): " + Utils.toHex8(r.internalRegisters.inst))
     }
   }
+
 
   // Execute DD FD CB prefix
   // Execute DD FD CB prefix

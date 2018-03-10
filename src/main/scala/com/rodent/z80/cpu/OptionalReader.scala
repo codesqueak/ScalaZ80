@@ -11,65 +11,88 @@ trait OptionalReader {
 
   // Deal with additional memory reads, both 8 and 16 bit for extended instructions
   def read(r: Registers): Registers = {
-    if (r.internalRegisters.cb) {
-      if (r.internalRegisters.z == atHL)
-        load8atHL(r) // bit n,(hl)
-      else
-        r
-    }
-    if (r.internalRegisters.dd || r.internalRegisters.fd) {
+    if (r.internalRegisters.ed) {
       r.internalRegisters.x match {
-        case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r) // LD IXIY,NN
-        case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD IXIY, (nn)
-        case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // inc (ixiy)
-        case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // dec (ixiy)
-        case 0 if r.internalRegisters.z == 6 => loadImmediate8IXIY(r) // ld (ixiy+dd),n
+        case 1 if (r.internalRegisters.z == 3) && (r.internalRegisters.q == 0) => loadImmediate16(r) // LD (nn), rp[p]
+        case 1 if (r.internalRegisters.z == 3) && (r.internalRegisters.q == 1) => load16atNN(r) // LD (nn), rp[p]
         //
-        case 1 if r.internalRegisters.z == atHL => load8atIXIY(r)
-        //
-        case 2 if r.internalRegisters.z == atHL => load8atIXIY(r)
-        //
-        case _ => r
+        case _ => r.internalRegisters.inst match {
+          case 0xA0 => load8atHL(r)
+          case 0xA8 => load8atHL(r)
+          case 0xB0 => load8atHL(r)
+          case 0xB8 => load8atHL(r)
+          //
+          case _ => r
+        }
       }
     }
     else {
-      r.internalRegisters.x match {
-        case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r)
-        case 0 if r.internalRegisters.inst == 0x0A => load8atBC(r) // LD A, (BC)
-        case 0 if r.internalRegisters.inst == 0x1A => load8atDE(r) // LD A, (DE)
-        case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD HL, (nn)
-        case 0 if r.internalRegisters.inst == 0x3A => load8atNN(r) // LD A, (nn)
-        case 0 if (r.internalRegisters.z == 0) && (r.internalRegisters.y > 1) => loadImmediate8(r) //jr
-        case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => load8atHL(r) // inc (hl)
-        case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => load8atHL(r) // dec (hl)
-        case 0 if r.internalRegisters.z == 6 => loadImmediate8(r) // ld r,n
+      if (r.internalRegisters.cb) {
+        if (r.internalRegisters.z == atHL)
+          load8atHL(r) // bit n,(hl)
+        else
+          r
+      }
+      else {
+        if (r.internalRegisters.dd || r.internalRegisters.fd) {
+          r.internalRegisters.x match {
+            case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r) // LD IXIY,NN
+            case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD IXIY, (nn)
+            case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // inc (ixiy)
+            case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // dec (ixiy)
+            case 0 if r.internalRegisters.z == 6 => loadImmediate8IXIY(r) // ld (ixiy+dd),n
+            //
+            case 1 if r.internalRegisters.z == atHL => load8atIXIY(r)
+            //
+            case 2 if r.internalRegisters.z == atHL => load8atIXIY(r)
+            //
+            case _ => r
+          }
+        }
+        else {
+          r.internalRegisters.x match {
+            case 0 if r.internalRegisters.inst == 0x01 => loadImmediate16(r) // LD BC,NN
+            case 0 if r.internalRegisters.inst == 0x11 => loadImmediate16(r) // LD DE,NN
+            case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r) // LD HL,NN
+            case 0 if r.internalRegisters.inst == 0x31 => loadImmediate16(r) // LD SP,NN
+            case 0 if r.internalRegisters.inst == 0x0A => load8atBC(r) // LD A, (BC)
+            case 0 if r.internalRegisters.inst == 0x1A => load8atDE(r) // LD A, (DE)
+            case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD HL, (nn)
+            case 0 if r.internalRegisters.inst == 0x3A => load8atNN(r) // LD A, (nn)
 
-        case 0 => r
-        //
-        case 1 if r.internalRegisters.z == atHL => load8atHL(r)
-        case 1 => r
-        //
-        case 2 if r.internalRegisters.z == atHL => load8atHL(r)
-        case 2 => r
-        //
-        case 3 if r.internalRegisters.z == 2 => loadImmediate16(r) // jp cc nn
-        case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 0) => loadImmediate16(r) // jp nn
-        case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 2) => loadImmediate8(r) // out(n),a
-        case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 3) => loadImmediate8(r) // in a,(n)
-        case 3 if r.internalRegisters.z == 4 => loadImmediate16(r) // call cc
-        case 3 if (r.internalRegisters.z == 5) && (r.internalRegisters.q == 1) && (r.internalRegisters.p == 0) => loadImmediate16(r) // call nn
-        case 3 if r.internalRegisters.z == 6 => loadImmediate8(r) // alu nn
-        case 3 => r
-        //
-        case _ => r
+            case 0 if (r.internalRegisters.z == 0) && (r.internalRegisters.y > 1) => loadImmediate8(r) //jr
+            case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => load8atHL(r) // inc (hl)
+            case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => load8atHL(r) // dec (hl)
+            case 0 if r.internalRegisters.z == 6 => loadImmediate8(r) // ld r,n
+
+            case 0 => r
+            //
+            case 1 if r.internalRegisters.z == atHL => load8atHL(r)
+            case 1 => r
+            //
+            case 2 if r.internalRegisters.z == atHL => load8atHL(r)
+            case 2 => r
+            //
+            case 3 if r.internalRegisters.z == 2 => loadImmediate16(r) // jp cc nn
+            case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 0) => loadImmediate16(r) // jp nn
+            case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 2) => loadImmediate8(r) // out(n),a
+            case 3 if (r.internalRegisters.z == 3) && (r.internalRegisters.y == 3) => loadImmediate8(r) // in a,(n)
+            case 3 if r.internalRegisters.z == 4 => loadImmediate16(r) // call cc
+            case 3 if (r.internalRegisters.z == 5) && (r.internalRegisters.q == 1) && (r.internalRegisters.p == 0) => loadImmediate16(r) // call nn
+            case 3 if r.internalRegisters.z == 6 => loadImmediate8(r) // alu nn
+            case 3 => r
+            //
+            case _ => r
+          }
+        }
       }
     }
   }
 
   // Load byte at (HL)
   private def load8atHL(registers: Registers): Registers = {
-    val br = registers.regFile1.copy(m8 = memory.getMemory(registers.getReg16(RegNames.H)))
-    registers.copy(regFile1 = br)
+    val rf1 = registers.regFile1.copy(m8 = memory.getMemory(registers.getReg16(RegNames.H)))
+    registers.copy(regFile1 = rf1)
   }
 
   // Load byte at (IXIY+dd)
@@ -108,8 +131,7 @@ trait OptionalReader {
   private def load16atNN(registers: Registers): Registers = {
     var r = loadImmediate16(registers)
     var addr = r.regFile1.m16
-    val v = memory.getMemory(addr) | (memory.getMemory(addr.inc16) << 8)
-    r.copy(regFile1 = r.setBaseReg(RegNames.M16, v))
+    r.copy(regFile1 = r.setBaseReg(RegNames.M16, memory.getMemory16(addr)))
   }
 
   // Load 8 bit value following instruction
