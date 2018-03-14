@@ -12,7 +12,7 @@ class Processor(m: Memory, p: Ports, var registers: Registers) extends Fetch wit
   def run(): Unit = {
     var continue: Boolean = true
     // Pipeline fetch -> decode -> read(opt) -> execute -> write(opt)
-    while (registers.getInst != 0x76) {
+    while (!(registers.getInst == 0x76 && !registers.extenedInstruction)) {
       registers = fetch(registers)
       registers = decode(registers)
       registers = read(registers)

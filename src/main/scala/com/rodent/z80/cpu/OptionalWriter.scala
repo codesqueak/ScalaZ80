@@ -14,71 +14,77 @@ trait OptionalWriter {
   def write(registers: Registers): Registers = {
     val r = writeOperations(registers)
     //
-    if ((r.internalRegisters.dd) && (r.internalRegisters.inst != 0xDD))
+    if (r.internalRegisters.dd && (r.internalRegisters.inst != 0xDD))
       return r.copy(internalRegisters = r.internalRegisters.copy(dd = false))
     //
-    if ((r.internalRegisters.fd) && (r.internalRegisters.inst != 0xFD))
+    if (r.internalRegisters.fd && (r.internalRegisters.inst != 0xFD))
       return r.copy(internalRegisters = r.internalRegisters.copy(fd = false))
     //
-    if ((r.internalRegisters.cb) && (r.internalRegisters.inst != 0xCB))
+    if (r.internalRegisters.cb && (r.internalRegisters.inst != 0xCB))
       return r.copy(internalRegisters = r.internalRegisters.copy(cb = false))
     //
-    if ((r.internalRegisters.ed) && (r.internalRegisters.inst != 0xED))
+    if (r.internalRegisters.ed && (r.internalRegisters.inst != 0xED))
       return r.copy(internalRegisters = r.internalRegisters.copy(ed = false))
     //
-    if ((r.internalRegisters.ddcb) && (r.internalRegisters.inst != 0xCB))
-      return r.copy(internalRegisters = r.internalRegisters.copy(ddcb = false))
+    if (r.internalRegisters.ddcb_load && (r.internalRegisters.inst != 0xCB))
+      return r.copy(internalRegisters = r.internalRegisters.copy(ddcb_load = false))
     //
-    if ((r.internalRegisters.fdcb) && (r.internalRegisters.inst != 0xCB))
-      r.copy(internalRegisters = r.internalRegisters.copy(fdcb = false))
-    else
-      r
+    if (r.internalRegisters.fdcb_load && (r.internalRegisters.inst != 0xCB))
+      return r.copy(internalRegisters = r.internalRegisters.copy(fdcb_load = false))
+    //
+    r
   }
 
 
   // Deal with additional memory writes, both 8 and 16 bit for extended instructions
   private def writeOperations(r: Registers): Registers = {
-    if (r.internalRegisters.dd || r.internalRegisters.fd) {
-      r.internalRegisters.x match {
-        case 0 if r.internalRegisters.inst == 0x22 => save16toNN(r) // LD (nn), IXIY
-        case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => save8toIXIY(r) // inc (ixiy)
-        case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => save8toIXIY(r) // dec (ixiy)
-        case 0 if (r.internalRegisters.z == 6) && (r.internalRegisters.y == atHL) => save8toIXIY(r) // ld (ixiy),n
-        //
-        case 1 if r.internalRegisters.y == atHL => save8toIXIYcalcAddr(r)
-        //
-        case _ => r
-      }
+    if (r.internalRegisters.ddcb_exec || r.internalRegisters.fdcb_exec) {
+      memory.setMemory(r.regFile1.m16, r.regFile1.m8)
+      r
     }
     else {
-      if (r.internalRegisters.ed) {
-        r.internalRegisters.inst match {
-          case 0xA0 => save8toM16(r)
-          case 0xA8 => save8toM16(r)
-          case 0xB0 => save8toM16(r)
-          case 0xB8 => save8toM16(r)
+      if (r.internalRegisters.dd || r.internalRegisters.fd) {
+        r.internalRegisters.x match {
+          case 0 if r.internalRegisters.inst == 0x22 => save16toNN(r) // LD (nn), IXIY
+          case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => save8toIXIY(r) // inc (ixiy)
+          case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => save8toIXIY(r) // dec (ixiy)
+          case 0 if (r.internalRegisters.z == 6) && (r.internalRegisters.y == atHL) => save8toIXIY(r) // ld (ixiy),n
+          //
+          case 1 if r.internalRegisters.y == atHL => save8toIXIYcalcAddr(r)
           //
           case _ => r
         }
       }
       else {
-        r.internalRegisters.x match {
-          case 0 if r.internalRegisters.inst == 0x02 => save8toBC(r) // LD (BC), A
-          case 0 if r.internalRegisters.inst == 0x12 => save8toDE(r) // LD (DE), A
-          case 0 if r.internalRegisters.inst == 0x22 => save16toNN(r) // LD (nn), HL
-          case 0 if r.internalRegisters.inst == 0x32 => save8toNN(r) // LD (nn), A
+        if (r.internalRegisters.ed) {
+          r.internalRegisters.inst match {
+            case 0xA0 => save8toM16(r)
+            case 0xA8 => save8toM16(r)
+            case 0xB0 => save8toM16(r)
+            case 0xB8 => save8toM16(r)
+            //
+            case _ => r
+          }
+        }
+        else {
+          r.internalRegisters.x match {
+            case 0 if r.internalRegisters.inst == 0x02 => save8toBC(r) // LD (BC), A
+            case 0 if r.internalRegisters.inst == 0x12 => save8toDE(r) // LD (DE), A
+            case 0 if r.internalRegisters.inst == 0x22 => save16toNN(r) // LD (nn), HL
+            case 0 if r.internalRegisters.inst == 0x32 => save8toNN(r) // LD (nn), A
 
-          case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => save8toHL(r) // inc (hl)
-          case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => save8toHL(r) // dec (hl)
-          case 0 if (r.internalRegisters.z == 6) && (r.internalRegisters.y == atHL) => save8toHL(r) // ld (hl),n
-          //
-          case 1 if r.internalRegisters.y == 6 => save8toHL(r)
-          //
-          case 2 => r
-          //
-          case 3 => r
-          //
-          case _ => r
+            case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => save8toHL(r) // inc (hl)
+            case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => save8toHL(r) // dec (hl)
+            case 0 if (r.internalRegisters.z == 6) && (r.internalRegisters.y == atHL) => save8toHL(r) // ld (hl),n
+            //
+            case 1 if r.internalRegisters.y == 6 => save8toHL(r)
+            //
+            case 2 => r
+            //
+            case 3 => r
+            //
+            case _ => r
+          }
         }
       }
     }
@@ -154,9 +160,7 @@ trait OptionalWriter {
   }
 
   // Load 8 bit value following instruction
-  private def loadImmediate8(registers: Registers): Registers
-
-  = {
+  private def loadImmediate8(registers: Registers): Registers = {
     var addr = registers.getPC
     val v = memory.getMemory(addr)
     val rf1 = registers.regFile1.copy(m8 = v)
@@ -165,9 +169,7 @@ trait OptionalWriter {
   }
 
   // Load 16 bit value following instruction
-  private def loadImmediate16(registers: Registers): Registers
-
-  = {
+  private def loadImmediate16(registers: Registers): Registers = {
     var addr = registers.getPC
     val lsb = memory.getMemory(addr)
     addr = addr.inc16

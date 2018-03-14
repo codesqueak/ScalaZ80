@@ -41,9 +41,11 @@ trait ALU {
         executeED(r)
       } else if (registers.internalRegisters.fd) {
         executeDDFD(r)
-      } else if (registers.internalRegisters.ddcb) {
-        executeDDFDCB(r)
-      } else if (registers.internalRegisters.fdcb) {
+      } else if (registers.internalRegisters.ddcb_load) {
+        r.copy(internalRegisters = r.internalRegisters.copy(ddcb_exec = true, ddcb_load = false))
+      } else if (registers.internalRegisters.fdcb_load) {
+        r.copy(internalRegisters = r.internalRegisters.copy(fdcb_exec = true, fdcb_load = false))
+      } else if (registers.internalRegisters.ddcb_exec || registers.internalRegisters.fdcb_exec) {
         executeDDFDCB(r)
       } else {
         registers.internalRegisters.x match {
@@ -393,7 +395,7 @@ trait ALU {
       val h = (((hl & 0x0FFF) + (rr & 0x0FFF)) & 0xF000) != 0 // half carry in msb
       val f5 = (v & 0x2000) != 0
       val f3 = (v & 0x0800) != 0
-      val c = 0 != (v & 0xFFFF)
+      val c = v > 0xFFFF
       //
       val regFile = registers.setFlags(f5f = Some(f5), hf = Some(h), f3f = Some(f3), nf = Some(false), cf = Some(c))
       if (registers.dd)
@@ -401,7 +403,7 @@ trait ALU {
       else if (registers.fd)
         registers.copy(indexRegisters = registers.setResultIY(v), regFile1 = regFile)
       else
-        registers.copy(regFile1 = regFile)
+        registers.copy(regFile1 = regFile.copy(h = v.msb, l = v.lsb))
     }
   }
 
@@ -442,7 +444,7 @@ trait ALU {
     val h = getHalfCarryFlagAdd(registers.getA, src, carry)
     val pv = getOverflowFlagAdd(registers.getA, src, carry)
     val n = false
-    val c = 0 != (raw & 0xFF)
+    val c = raw > 0xFF
     //
     registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
     )
@@ -461,7 +463,7 @@ trait ALU {
     val h = getHalfCarryFlagSub(registers.getA, src, carry)
     val pv = getOverflowFlagSub(registers.getA, src, carry)
     val n = true
-    val c = 0 != (raw & 0xFF)
+    val c = raw > 0xFF
     //
     registers.copy(regFile1 = registers.setResultA(v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(h), f3f = v.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
     )
@@ -479,7 +481,7 @@ trait ALU {
     val h = getHalfCarryFlagSub(registers.getA, src, carry = false)
     val pv = getOverflowFlagSub(registers.getA, src, carry = false)
     val n = true
-    val c = 0 != (raw & 0xFF)
+    val c = raw > 0xFF
     //
     registers.copy(regFile1 = registers.setFlags(sf = Some(s), zf = Some(z), f5f = src.f5, hf = Some(h), f3f = src.f3, pvf = Some(pv), nf = Some(n), cf = Some(c))
     )
@@ -715,9 +717,9 @@ trait ALU {
       case 0xBE => cp8(r)
       case 0xCB => // switch to dd cb or fd cb mode
         if (r.internalRegisters.dd)
-          r.copy(internalRegisters = r.internalRegisters.copy(dd = false, ddcb = true))
+          r.copy(internalRegisters = r.internalRegisters.copy(dd = false, ddcb_load = true, ddcb_exec = false))
         else
-          r.copy(internalRegisters = r.internalRegisters.copy(fd = false, fdcb = true))
+          r.copy(internalRegisters = r.internalRegisters.copy(fd = false, fdcb_load = true, fdcb_exec = false))
       //
       case 0xE1 => //pop
         var v = memory.pop(r.getSP)
@@ -772,7 +774,7 @@ trait ALU {
     var f5f3 = (r.getA + r.getReg(RegNames.M16)).limit8 & 0x28 // f5,f33
     flags = flags | f5f3
     if (bc != 0) flags = flags | 0x04
-    r.regFile1.copy(f = flags, a = r.getReg(RegNames.M8), h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, m16 = target)
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, m16 = target)
   }
 
 
@@ -784,7 +786,7 @@ trait ALU {
     var f5f3 = (r.getA + r.getReg(RegNames.M16)).limit8 & 0x28 // f5,f33
     flags = flags | f5f3
     if (bc != 0) flags = flags | 0x04
-    r.regFile1.copy(f = flags, a = r.getReg(RegNames.M8), h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb)
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb)
   }
 
   private def executeED(r: Registers): Registers = {
@@ -838,11 +840,51 @@ trait ALU {
   // Execute DD FD CB prefix
 
   private def executeDDFDCB(r: Registers): Registers = {
-    r.internalRegisters.inst match {
+    println("executeDDFDCB " + Utils.toHex8(r.getInst))
+    val reg = r.internalRegisters.x match {
+      case 0 => rotateDDFDCB(r)
+      case 1 => bitDDFDCB(r)
+      case 2 => resDDFDCB(r)
+      case 3 => setDDFDCB(r)
+    }
+    reg.copy(internalRegisters = reg.internalRegisters.copy(ddcb_exec = false, fdcb_exec = false))
+  }
 
-      case _ => throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (ddfdcb): " + Utils.toHex8(r.internalRegisters.inst))
+  private def rotateDDFDCB(r: Registers): Registers = {
+    r.internalRegisters.z match {
+      //  case 1 => r
+      case _ => throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
     }
   }
+
+  private def bitDDFDCB(r: Registers): Registers = {
+    if (r.internalRegisters.z == 6) {
+      val v = r.getReg(RegNames.M8)
+      val z = 0 == (v & testBit(r.internalRegisters.y))
+      var s = false
+      if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
+      r.copy(regFile1 = r.setFlags(sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
+    }
+    else
+      throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
+  }
+
+  private def resDDFDCB(r: Registers): Registers = {
+    throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
+  }
+
+  private def setDDFDCB(r: Registers): Registers = {
+    if (r.internalRegisters.z == 6) {
+      val v = r.getReg(RegNames.M8) | testBit(r.internalRegisters.y)
+      val z = 0 == v
+      var s = false
+      if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
+      r.copy(regFile1 = r.setResult8(RegNames.M8, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
+    }
+    else
+      throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
+  }
+
 
   // helpers - helpers - helpers
   // helpers - helpers - helpers
@@ -921,7 +963,7 @@ trait ALU {
 
   /* P/V calculation */
   private def getParityFlag(v: Int): Boolean = {
-    val count = nibbleParity(v & 0x0F) + +nibbleParity((v & 0xF) >>> 4)
+    val count = nibbleParity(v & 0x0F) + nibbleParity((v & 0xF0) >>> 4)
     0 == (count & 0x01)
   }
 

@@ -52,6 +52,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def fd: Boolean = internalRegisters.fd
 
+  def extenedInstruction: Boolean = internalRegisters.cb || internalRegisters.dd || internalRegisters.ed || internalRegisters.fd || internalRegisters.ddcb_load || internalRegisters.fdcb_load || internalRegisters.ddcb_exec || internalRegisters.fdcb_exec
+
 
   // reg get
   private def getSafeReg(reg: RegName): Option[Int] = {
@@ -131,7 +133,7 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.F => regFile1.copy(f = v)
       case RegNames.B => regFile1.copy(b = v)
       case RegNames.C => regFile1.copy(c = v)
-      case RegNames.D => regFile1.copy(e = v)
+      case RegNames.D => regFile1.copy(d = v)
       case RegNames.E => regFile1.copy(e = v)
       case RegNames.H => regFile1.copy(h = v)
       case RegNames.L => regFile1.copy(l = v)
