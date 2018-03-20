@@ -38,19 +38,4 @@ class BasicTest extends FlatSpec with Matchers {
   }
 
 
-  //
-  //
-  //  "CPU" should "reset correctly" in {
-  //    val memory = new Memory()
-  //    memory.setMemory(Array(0x00, 0x00, 0x76))
-  //    val ports = new Ports()
-  //    val cpu = new Processor(memory, ports, Registers())
-  //    cpu.run()
-  //
-  //    cpu.registers.getReg16(RegNames.H) should be(0x0000)
-  //
-  //    println("HALT")
-  //
-  //  }
-
 }

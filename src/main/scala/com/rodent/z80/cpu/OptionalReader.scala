@@ -90,6 +90,8 @@ trait OptionalReader {
         }
       }
     }
+    else if (r.internalRegisters.cb)
+      r
     else
       throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + "Optional reader state error")
   }

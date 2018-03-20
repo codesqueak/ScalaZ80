@@ -55,23 +55,23 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
   // reg get
   private def getSafeReg(reg: RegName): Option[Int] = {
     reg match {
-      case RegNames.A => Some(regFile1.a)
-      case RegNames.F => Some(regFile1.f)
-      case RegNames.B => Some(regFile1.b)
-      case RegNames.C => Some(regFile1.c)
-      case RegNames.D => Some(regFile1.d)
-      case RegNames.E => Some(regFile1.e)
-      case RegNames.H => Some(regFile1.h)
-      case RegNames.L => Some(regFile1.l)
+      case RegNames.A => Option(regFile1.a)
+      case RegNames.F => Option(regFile1.f)
+      case RegNames.B => Option(regFile1.b)
+      case RegNames.C => Option(regFile1.c)
+      case RegNames.D => Option(regFile1.d)
+      case RegNames.E => Option(regFile1.e)
+      case RegNames.H => Option(regFile1.h)
+      case RegNames.L => Option(regFile1.l)
       case RegNames.DATA8 => regFile1.data8
-      case RegNames.IX => Some(indexRegisters.ix)
-      case RegNames.IY => Some(indexRegisters.iy)
-      case RegNames.PC => Some(controlRegisters.pc)
-      case RegNames.SP => Some(controlRegisters.sp)
-      case RegNames.R => Some(controlRegisters.r)
+      case RegNames.IX => Option(indexRegisters.ix)
+      case RegNames.IY => Option(indexRegisters.iy)
+      case RegNames.PC => Option(controlRegisters.pc)
+      case RegNames.SP => Option(controlRegisters.sp)
+      case RegNames.R => Option(controlRegisters.r)
       case RegNames.DATA16 => regFile1.data16
       case RegNames.WZ => regFile1.wz
-      case RegNames.INST => Some(internalRegisters.inst)
+      case RegNames.INST => Option(internalRegisters.inst)
       case _ => None
     }
   }

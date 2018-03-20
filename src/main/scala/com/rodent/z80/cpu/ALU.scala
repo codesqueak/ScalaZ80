@@ -49,11 +49,13 @@ trait ALU {
         if (regs.internalRegisters.dd || regs.internalRegisters.dd) {
           // dd cb nn  op
           val r = executeDDFDCB(regs)
+          println("Reset CB DD/FD")
           r.copy(internalRegisters = r.internalRegisters.copy(single = true, cb = false, dd = false, fd = false))
         }
         else {
           // cb op
           var r = executeCB(regs)
+          println("Reset CB")
           r.copy(internalRegisters = r.internalRegisters.copy(single = true, cb = false))
         }
       else if (regs.internalRegisters.dd || regs.internalRegisters.fd) {
@@ -145,7 +147,10 @@ trait ALU {
   private def variousJpExInOut(r: Registers): Registers = {
     r.internalRegisters.y match {
       case 0 => jp(r) // jp nn
-      case 1 => r.copy(internalRegisters = r.internalRegisters.copy(cb = true))
+      case 1 => {
+        println("Set CB")
+        r.copy(internalRegisters = r.internalRegisters.copy(single = false, cb = true))
+      }
       case 2 => ports.setPort(r.regFile1.data8.get, r.getA)
         r
       case 3 => r.copy(regFile1 = r.regFile1.copy(a = 0, f = 0)) // xyzzy
@@ -724,10 +729,14 @@ trait ALU {
       case 0x96 => subSbc8(r, sbc = false)
       case 0x9E => subSbc8(r, sbc = true)
       case 0xA6 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r)
+      case 0xA6 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r)
       case 0xAE => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r)
       case 0xB6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r)
       case 0xBE => cp8(r)
-      case 0xCB => r.copy(internalRegisters = r.internalRegisters.copy(cb = true))
+      case 0xCB => {
+        println("Set CB DD/FD")
+        r.copy(internalRegisters = r.internalRegisters.copy(single = false, cb = true))
+      }
       //
       case 0xE1 => //pop
         var v = memory.pop(r.getSP)
@@ -782,19 +791,57 @@ trait ALU {
     var f5f3 = (r.getA + r.getReg(RegNames.DATA8)).limit8 & 0x28 // f5,f33
     flags = flags | f5f3
     if (bc != 0) flags = flags | 0x04
-    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, data16 = Option(target))
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, wz = Option(target))
   }
 
 
   private def ldd(r: Registers): BaseRegisters = {
     val hl = r.getReg16(RegNames.H).dec16
-    val de = r.getReg16(RegNames.D).dec16
+    val target = r.getReg16(RegNames.D)
+    val de = target.dec16
     val bc = r.getReg16(RegNames.B).dec16
     var flags = r.getReg(RegNames.F) & 0xC1 // f5=0,h=0,f3=0,pv=0,n=0
-    var f5f3 = (r.getA + r.getReg(RegNames.DATA16)).limit8 & 0x28 // f5,f33
+    var f5f3 = (r.getA + r.getReg(RegNames.DATA8)).limit8 & 0x28 // f5,f33
     flags = flags | f5f3
     if (bc != 0) flags = flags | 0x04
-    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb)
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, wz = Option(target))
+  }
+
+  private def cpi(r: Registers): BaseRegisters = {
+    val hl = r.getReg16(RegNames.H).inc16
+    val bc = r.getReg16(RegNames.B).dec16
+    var flags = (r.getReg(RegNames.F) & 0x01) | 0x02 // c = unchanged, n=1
+    //
+    val raw = r.getA - r.getReg(RegNames.DATA8)
+    var v = raw.limit8
+    val s = (raw & 0x80) != 0
+    val z = v == 0
+    val h = getHalfCarryFlagSub(r.getA, r.getReg(RegNames.DATA8), carry = false)
+    //
+    if (h) v -= 1
+    var f5f3 = v & 0x28 // f5,f3
+    flags = flags | f5f3
+    if (bc != 0) flags = flags | 0x04
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, b = bc.msb, c = bc.lsb)
+  }
+
+
+  private def cpd(r: Registers): BaseRegisters = {
+    val hl = r.getReg16(RegNames.H).dec16
+    val bc = r.getReg16(RegNames.B).dec16
+    var flags = (r.getReg(RegNames.F) & 0x01) | 0x02 // c = unchanged, n=1
+    //
+    val raw = r.getA - r.getReg(RegNames.DATA8)
+    var v = raw.limit8
+    val s = (raw & 0x80) != 0
+    val z = v == 0
+    val h = getHalfCarryFlagSub(r.getA, r.getReg(RegNames.DATA8), carry = false)
+    //
+    if (h) v -= 1
+    var f5f3 = v & 0x28 // f5,f3
+    flags = flags | f5f3
+    if (bc != 0) flags = flags | 0x04
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, b = bc.msb, c = bc.lsb)
   }
 
   private def executeED(r: Registers): Registers = {
@@ -803,7 +850,9 @@ trait ALU {
     else
       r.internalRegisters.inst match {
         case 0xA0 => r.copy(regFile1 = ldi(r)) // LDI
+        case 0xA1 => r.copy(regFile1 = cpi(r)) // CPI
         case 0xA8 => r.copy(regFile1 = ldd(r)) // LDD
+        case 0xA9 => r.copy(regFile1 = cpd(r)) // CPD
         case 0xB0 => { // LDIR
           val rf1 = ldi(r)
           if ((0 != rf1.b) || (0 != rf1.c))
@@ -811,8 +860,22 @@ trait ALU {
           else
             r.copy(regFile1 = rf1)
         }
+        case 0xB1 => { // CPIR
+          val rf1 = cpi(r)
+          if ((0 != rf1.b) || (0 != rf1.c))
+            r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
+          else
+            r.copy(regFile1 = rf1)
+        }
         case 0xB8 => { // LDDR
-          val rf1 = ldi(r)
+          val rf1 = ldd(r)
+          if ((0 != rf1.b) || (0 != rf1.c))
+            r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
+          else
+            r.copy(regFile1 = rf1)
+        }
+        case 0xB9 => { // CPDR
+          val rf1 = cpd(r)
           if ((0 != rf1.b) || (0 != rf1.c))
             r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
           else

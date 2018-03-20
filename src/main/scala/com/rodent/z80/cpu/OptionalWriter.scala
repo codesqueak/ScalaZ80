@@ -14,12 +14,12 @@ trait OptionalWriter {
       if (r.regFile1.data8.isDefined) {
         memory.setMemory(r.regFile1.wz.get, r.regFile1.data8.get)
         //    println("writing " + Utils.toHex8(r.regFile1.data8.get) + " to " + Utils.toHex16(r.regFile1.wz))
-        r.copy(regFile1 = r.regFile1.copy(data8 = None, wz = None))
+        r.copy(regFile1 = r.regFile1.copy(data8 = None, data16 = None, wz = None))
       }
       else if (r.regFile1.data16.isDefined) {
         memory.setMemory16(r.regFile1.wz.get, r.regFile1.data16.get)
         //     println("writing " + Utils.toHex16(r.regFile1.data16.get) + " to " + Utils.toHex16(r.regFile1.wz))
-        r.copy(regFile1 = r.regFile1.copy(data16 = None, wz = None))
+        r.copy(regFile1 = r.regFile1.copy(data8 = None, data16 = None, wz = None))
       }
       else
         throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " wz set but no data available")
