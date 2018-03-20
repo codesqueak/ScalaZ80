@@ -2,7 +2,7 @@ package com.rodent.z80.cpu
 
 import com.rodent.z80.CPUZ.RegNames
 import com.rodent.z80.CPUZ.RegNames.RegName
-import com.rodent.z80.func._
+import com.rodent.z80.func.Utils
 
 case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                      regFile2: BaseRegisters = BaseRegisters(),
@@ -52,9 +52,6 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def fd: Boolean = internalRegisters.fd
 
-  def extenedInstruction: Boolean = internalRegisters.cb || internalRegisters.dd || internalRegisters.ed || internalRegisters.fd || internalRegisters.ddcb_load || internalRegisters.fdcb_load || internalRegisters.ddcb_exec || internalRegisters.fdcb_exec
-
-
   // reg get
   private def getSafeReg(reg: RegName): Option[Int] = {
     reg match {
@@ -66,13 +63,14 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.E => Some(regFile1.e)
       case RegNames.H => Some(regFile1.h)
       case RegNames.L => Some(regFile1.l)
-      case RegNames.M8 => Some(regFile1.m8)
+      case RegNames.DATA8 => regFile1.data8
       case RegNames.IX => Some(indexRegisters.ix)
       case RegNames.IY => Some(indexRegisters.iy)
       case RegNames.PC => Some(controlRegisters.pc)
       case RegNames.SP => Some(controlRegisters.sp)
       case RegNames.R => Some(controlRegisters.r)
-      case RegNames.M16 => Some(regFile1.m16)
+      case RegNames.DATA16 => regFile1.data16
+      case RegNames.WZ => regFile1.wz
       case RegNames.INST => Some(internalRegisters.inst)
       case _ => None
     }
@@ -93,7 +91,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.IY => indexRegisters.iy
       case RegNames.PC => controlRegisters.pc
       case RegNames.SP => controlRegisters.sp
-      case RegNames.M16 => regFile1.m16
+      case RegNames.DATA16 => regFile1.data16.get
+      case RegNames.WZ => regFile1.wz.get
     }
   }
 
@@ -109,7 +108,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.IY => indexRegisters.iy
       case RegNames.PC => controlRegisters.pc
       case RegNames.SP => controlRegisters.sp
-      case RegNames.M16 => regFile1.m16
+      case RegNames.DATA16 => regFile1.data16.get
+      case RegNames.WZ => regFile1.wz.get
     }
   }
 
@@ -123,7 +123,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.IY => indexRegisters.iy
       case RegNames.PC => controlRegisters.pc
       case RegNames.SP => controlRegisters.sp
-      case RegNames.M16 => regFile2.m16
+      case RegNames.DATA16 => regFile2.data16.get
+      case RegNames.WZ => regFile2.wz.get
     }
   }
 
@@ -137,8 +138,9 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.E => regFile1.copy(e = v)
       case RegNames.H => regFile1.copy(h = v)
       case RegNames.L => regFile1.copy(l = v)
-      case RegNames.M8 => regFile1.copy(m8 = v)
-      case RegNames.M16 => regFile1.copy(m16 = v)
+      case RegNames.DATA8 => regFile1.copy(data8 = Option(v))
+      case RegNames.DATA16 => regFile1.copy(data16 = Option(v))
+      case RegNames.WZ => regFile1.copy(wz = Option(v))
     }
   }
 
@@ -183,7 +185,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.B => regFile1.copy(b = msb, c = lsb)
       case RegNames.D => regFile1.copy(d = msb, e = lsb)
       case RegNames.H => regFile1.copy(h = msb, l = lsb)
-      case RegNames.M16 => regFile1.copy(m16 = v)
+      case RegNames.DATA16 => regFile1.copy(data16 = Option(v))
+      case RegNames.WZ => regFile1.copy(wz = Option(v))
     }
   }
 

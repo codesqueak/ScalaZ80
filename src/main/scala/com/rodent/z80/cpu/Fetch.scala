@@ -11,16 +11,12 @@ trait Fetch {
   val memory: Memory
 
   def fetch(registers: Registers): Registers = {
-    if (registers.internalRegisters.ddcb_load || registers.internalRegisters.fdcb_load)
-      registers
-    else {
-      var pc = registers.getPC
-      val ir = registers.internalRegisters.copy(inst = memory.getMemory(pc))
-      println("Execute @" + Utils.toHex16(registers.getPC) + " : " + Utils.toHex8(ir.inst) + " SP:" + Utils.toHex16(registers.getSP) + regs(registers))
-      pc = (pc + 1) & 0xFFFF
-      val cr = registers.controlRegisters.copy(pc = pc)
-      registers.copy(internalRegisters = ir, controlRegisters = cr)
-    }
+    var pc = registers.getPC
+    val ir = registers.internalRegisters.copy(inst = memory.getMemory(pc))
+    //  println("Execute @" + Utils.toHex16(registers.getPC) + " : " + Utils.toHex8(ir.inst) + " SP:" + Utils.toHex16(registers.getSP) + regs(registers))
+    pc = (pc + 1) & 0xFFFF
+    val cr = registers.controlRegisters.copy(pc = pc)
+    registers.copy(internalRegisters = ir, controlRegisters = cr)
   }
 
   def regs(registers: Registers): String = {

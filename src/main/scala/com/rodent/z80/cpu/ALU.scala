@@ -8,7 +8,7 @@ import scala.language.implicitConversions
 
 trait ALU {
 
-  val reg8Bit = Map(0 -> RegNames.B, 1 -> RegNames.C, 2 -> RegNames.D, 3 -> RegNames.E, 4 -> RegNames.H, 5 -> RegNames.L, 6 -> RegNames.M8, 7 -> RegNames.A)
+  val reg8Bit = Map(0 -> RegNames.B, 1 -> RegNames.C, 2 -> RegNames.D, 3 -> RegNames.E, 4 -> RegNames.H, 5 -> RegNames.L, 6 -> RegNames.DATA8, 7 -> RegNames.A)
   val reg16Bit = Map(0 -> RegNames.B, 1 -> RegNames.D, 2 -> RegNames.H, 3 -> RegNames.SP)
   val reg16Bit2 = Map(0 -> RegNames.B, 1 -> RegNames.D, 2 -> RegNames.H, 3 -> RegNames.A)
 
@@ -21,42 +21,54 @@ trait ALU {
   val memory: Memory
   val ports: Ports
 
-  def execute(registers: Registers): Registers = {
+  def execute(regs: Registers): Registers = {
     // http://www.z80.info/decoding.htm
     // http://www.z80.info/z80oplist.txt
     // http://www.z80.info/z80sflag.htm
     // http://clrhome.org/table/
-    var r = registers
-    if (r.internalRegisters.inst == 0x76) {
+    //    var r = registers
+    if (regs.internalRegisters.inst == 0x76) {
       // HALT processing (Interrupt flip flops etc)
-      r
+      regs
     }
     else {
-      // execute the instruction
-      if (registers.internalRegisters.cb) {
-        executeCB(r)
-      } else if (registers.internalRegisters.dd) {
-        executeDDFD(r)
-      } else if (registers.internalRegisters.ed) {
-        executeED(r)
-      } else if (registers.internalRegisters.fd) {
-        executeDDFD(r)
-      } else if (registers.internalRegisters.ddcb_load) {
-        r.copy(internalRegisters = r.internalRegisters.copy(ddcb_exec = true, ddcb_load = false))
-      } else if (registers.internalRegisters.fdcb_load) {
-        r.copy(internalRegisters = r.internalRegisters.copy(fdcb_exec = true, fdcb_load = false))
-      } else if (registers.internalRegisters.ddcb_exec || registers.internalRegisters.fdcb_exec) {
-        executeDDFDCB(r)
-      } else {
-        registers.internalRegisters.x match {
-          case 0 => general0(r)
-          case 1 => load8(r)
-          case 2 => general8BitALU(r)
-          case 3 => general3(r)
+      if (regs.internalRegisters.single)
+      // single byte
+        regs.internalRegisters.x match {
+          case 0 => general0(regs)
+          case 1 => load8(regs)
+          case 2 => general8BitALU(regs)
+          case 3 => general3(regs)
         }
+      else if (regs.internalRegisters.ed) {
+        // ed op
+        val r = executeED(regs)
+        r.copy(internalRegisters = r.internalRegisters.copy(single = true, ed = false))
       }
+      else if (regs.internalRegisters.cb)
+        if (regs.internalRegisters.dd || regs.internalRegisters.dd) {
+          // dd cb nn  op
+          val r = executeDDFDCB(regs)
+          r.copy(internalRegisters = r.internalRegisters.copy(single = true, cb = false, dd = false, fd = false))
+        }
+        else {
+          // cb op
+          var r = executeCB(regs)
+          r.copy(internalRegisters = r.internalRegisters.copy(single = true, cb = false))
+        }
+      else if (regs.internalRegisters.dd || regs.internalRegisters.fd) {
+        // dd nn op or dd op
+        var r = executeDDFD(regs)
+        if (r.internalRegisters.cb)
+          r
+        else
+          r.copy(internalRegisters = r.internalRegisters.copy(single = true, dd = false, fd = false))
+      }
+      else
+        throw new UndefOpcode("Addr: " + Utils.toHex16(regs.getPC) + " inst : " + Utils.toHex8(regs.internalRegisters.inst))
     }
   }
+
 
   // Instructions 0x00 -> 0x3F
   // Instructions 0x00 -> 0x3F
@@ -134,7 +146,7 @@ trait ALU {
     r.internalRegisters.y match {
       case 0 => jp(r) // jp nn
       case 1 => r.copy(internalRegisters = r.internalRegisters.copy(cb = true))
-      case 2 => ports.setPort(r.regFile1.m8, r.getA)
+      case 2 => ports.setPort(r.regFile1.data8.get, r.getA)
         r
       case 3 => r.copy(regFile1 = r.regFile1.copy(a = 0, f = 0)) // xyzzy
       case 4 => // ex (sp),hl
@@ -158,9 +170,9 @@ trait ALU {
     else
       r.internalRegisters.p match {
         case 0 => call(r)
-        case 1 => r.copy(internalRegisters = r.internalRegisters.copy(dd = true))
-        case 2 => r.copy(internalRegisters = r.internalRegisters.copy(ed = true))
-        case 3 => r.copy(internalRegisters = r.internalRegisters.copy(fd = true))
+        case 1 => r.copy(internalRegisters = r.internalRegisters.copy(single = false, dd = true))
+        case 2 => r.copy(internalRegisters = r.internalRegisters.copy(single = false, ed = true))
+        case 3 => r.copy(internalRegisters = r.internalRegisters.copy(single = false, fd = true))
       }
   }
 
@@ -192,15 +204,14 @@ trait ALU {
 
   // Indirect loading
   private def indirectLoad(r: Registers): Registers = {
-    var rf1: BaseRegisters = null
     if (0 == r.internalRegisters.q)
       r.internalRegisters.p match {
-        case 0 => setMemory8fromA(r) // LD (BC), A
-        case 1 => setMemory8fromA(r) // LD (DE), A
-        case 2 if r.internalRegisters.dd => setMemory16fromIX(r) // LD (nn), IX
-        case 2 if r.internalRegisters.fd => setMemory16fromIY(r) // LD (nn), IY
-        case 2 => setMemory16fromHL(r) // LD (nn), HL
-        case 3 => setMemory8fromA(r) // LD (nn), A
+        case 0 => setMemory8fromA(r, r.getReg16(RegNames.B)) // LD (BC), A
+        case 1 => setMemory8fromA(r, r.getReg16(RegNames.D)) // LD (DE), A
+        case 2 if r.internalRegisters.dd => setMemory16fromIX(r, r.getReg16(RegNames.DATA16)) // LD (nn), IX
+        case 2 if r.internalRegisters.fd => setMemory16fromIY(r, r.getReg16(RegNames.DATA16)) // LD (nn), IY
+        case 2 => setMemory16fromHL(r, r.getReg16(RegNames.DATA16)) // LD (nn), HL
+        case 3 => setMemory8fromA(r, r.getReg16(RegNames.DATA16)) // LD (nn), A
       }
     else
       r.internalRegisters.p match {
@@ -319,7 +330,7 @@ trait ALU {
   // ld registers,nn
   private def ldImmediate8(r: Registers): Registers = {
     val regName = reg8Bit(r.internalRegisters.y)
-    r.copy(regFile1 = r.setBaseReg(regName, r.getReg(RegNames.M8)))
+    r.copy(regFile1 = r.setBaseReg(regName, r.getReg(RegNames.DATA8)))
   }
 
   // inc / dec rr
@@ -374,7 +385,7 @@ trait ALU {
     var cr = registers.controlRegisters
     if (registers.internalRegisters.q == 0) {
       // LD rr,(mm)
-      val v = r.m16
+      val v = r.data16.get
       val lsb = v.lsb
       val msb = v.msb
       registers.internalRegisters.p match {
@@ -425,7 +436,7 @@ trait ALU {
       case 3 => r = r.copy(e = v)
       case 4 => r = r.copy(h = v)
       case 5 => r = r.copy(l = v)
-      case 6 => r = r.copy(m8 = v)
+      case 6 => r = r.copy(data8 = Option(v))
       case 7 => r = r.copy(a = v)
     }
     registers.copy(regFile1 = r)
@@ -545,7 +556,7 @@ trait ALU {
 
   // relative jump
   private def jr(r: Registers): Registers = {
-    var offset = r.getReg(RegNames.M8)
+    var offset = r.getReg(RegNames.DATA8)
     if (offset > 0x007F) offset = offset - 0x0100
     val pc = (r.getPC + offset).limit16
     r.copy(controlRegisters = r.setPC(pc))
@@ -553,21 +564,22 @@ trait ALU {
 
   // absolute jump
   private def jp(r: Registers): Registers = {
-    r.copy(controlRegisters = r.setPC(r.getReg(RegNames.M16)))
+    r.copy(controlRegisters = r.setPC(r.getReg(RegNames.DATA16)))
   }
 
   // absolute call
   private def call(r: Registers): Registers = {
     //   println("call from " + Utils.toHex16(r.getPC) + " to " + Utils.toHex16(r.getReg(RegNames.M16)) + " sp:" + Utils.toHex16(r.getSP))
     memory.push(r.getSP, r.getPC)
-    r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.M16), sp = (r.getSP - 2).limit16))
+    r.copy(controlRegisters = r.controlRegisters.copy(pc = r.getReg(RegNames.DATA16), sp = (r.getSP - 2).limit16))
   }
 
   // Execute CB prefix
   // Execute CB prefix
   // Execute CB prefix
 
-  private def executeCB(r: Registers): Registers = {
+  private def executeCB(regs: Registers): Registers = {
+    val r = regs.copy(internalRegisters = regs.internalRegisters.copy(cb = false))
     r.internalRegisters.x match {
       case 0 => // rot[y] r[z]
         r.internalRegisters.y match {
@@ -715,11 +727,7 @@ trait ALU {
       case 0xAE => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r)
       case 0xB6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r)
       case 0xBE => cp8(r)
-      case 0xCB => // switch to dd cb or fd cb mode
-        if (r.internalRegisters.dd)
-          r.copy(internalRegisters = r.internalRegisters.copy(dd = false, ddcb_load = true, ddcb_exec = false))
-        else
-          r.copy(internalRegisters = r.internalRegisters.copy(fd = false, fdcb_load = true, fdcb_exec = false))
+      case 0xCB => r.copy(internalRegisters = r.internalRegisters.copy(cb = true))
       //
       case 0xE1 => //pop
         var v = memory.pop(r.getSP)
@@ -771,10 +779,10 @@ trait ALU {
     val de = target.inc16
     val bc = r.getReg16(RegNames.B).dec16
     var flags = r.getReg(RegNames.F) & 0xC1 // f5=0,h=0,f3=0,pv=0,n=0
-    var f5f3 = (r.getA + r.getReg(RegNames.M16)).limit8 & 0x28 // f5,f33
+    var f5f3 = (r.getA + r.getReg(RegNames.DATA8)).limit8 & 0x28 // f5,f33
     flags = flags | f5f3
     if (bc != 0) flags = flags | 0x04
-    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, m16 = target)
+    r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb, data16 = Option(target))
   }
 
 
@@ -783,7 +791,7 @@ trait ALU {
     val de = r.getReg16(RegNames.D).dec16
     val bc = r.getReg16(RegNames.B).dec16
     var flags = r.getReg(RegNames.F) & 0xC1 // f5=0,h=0,f3=0,pv=0,n=0
-    var f5f3 = (r.getA + r.getReg(RegNames.M16)).limit8 & 0x28 // f5,f33
+    var f5f3 = (r.getA + r.getReg(RegNames.DATA16)).limit8 & 0x28 // f5,f33
     flags = flags | f5f3
     if (bc != 0) flags = flags | 0x04
     r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, d = de.msb, e = de.lsb, b = bc.msb, c = bc.lsb)
@@ -819,11 +827,11 @@ trait ALU {
     r.internalRegisters.z match {
       case 3 => //
         if (r.internalRegisters.q == 0) {
-          memory.setMemory16(r.getReg16(RegNames.M16), r.getReg16(reg16Bit(r.internalRegisters.p)))
+          memory.setMemory16(r.getReg16(RegNames.DATA16), r.getReg16(reg16Bit(r.internalRegisters.p)))
           r
         }
         else {
-          val v = r.getReg16(RegNames.M16)
+          val v = r.getReg16(RegNames.DATA16)
           if (r.internalRegisters.p == 3) // sp
             r.copy(controlRegisters = r.setSP(v))
           else
@@ -841,13 +849,13 @@ trait ALU {
 
   private def executeDDFDCB(r: Registers): Registers = {
     println("executeDDFDCB " + Utils.toHex8(r.getInst))
-    val reg = r.internalRegisters.x match {
+    r.internalRegisters.x match {
       case 0 => rotateDDFDCB(r)
       case 1 => bitDDFDCB(r)
       case 2 => resDDFDCB(r)
       case 3 => setDDFDCB(r)
+      case _ => throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
     }
-    reg.copy(internalRegisters = reg.internalRegisters.copy(ddcb_exec = false, fdcb_exec = false))
   }
 
   private def rotateDDFDCB(r: Registers): Registers = {
@@ -859,7 +867,7 @@ trait ALU {
 
   private def bitDDFDCB(r: Registers): Registers = {
     if (r.internalRegisters.z == 6) {
-      val v = r.getReg(RegNames.M8)
+      val v = r.getReg(RegNames.DATA8)
       val z = 0 == (v & testBit(r.internalRegisters.y))
       var s = false
       if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
@@ -875,11 +883,11 @@ trait ALU {
 
   private def setDDFDCB(r: Registers): Registers = {
     if (r.internalRegisters.z == 6) {
-      val v = r.getReg(RegNames.M8) | testBit(r.internalRegisters.y)
+      val v = r.getReg(RegNames.DATA8) | testBit(r.internalRegisters.y)
       val z = 0 == v
       var s = false
       if (7 == r.internalRegisters.y) s = 0 != (v & 0x80)
-      r.copy(regFile1 = r.setResult8(RegNames.M8, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
+      r.copy(regFile1 = r.setResult8(RegNames.DATA8, v, sf = Some(s), zf = Some(z), f5f = v.f5, hf = Some(true), f3f = v.f3, pvf = Some(z), nf = Some(false)))
     }
     else
       throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
@@ -890,36 +898,40 @@ trait ALU {
   // helpers - helpers - helpers
   // helpers - helpers - helpers
 
-  private def setMemory8fromA(r: Registers): Registers = {
-    r.copy(regFile1 = r.setBaseReg(RegNames.M8, r.getReg(RegNames.A)))
+  private def setMemory8fromA(r: Registers, addr: Int): Registers = {
+    val rf1 = r.setBaseReg(RegNames.DATA8, r.getReg(RegNames.A))
+    r.copy(regFile1 = rf1.copy(wz = Option(addr)))
   }
 
   private def setAfromMemory8(r: Registers): Registers = {
-    r.copy(regFile1 = r.setBaseReg(RegNames.A, r.getReg(RegNames.M8)))
+    r.copy(regFile1 = r.setBaseReg(RegNames.A, r.getReg(RegNames.DATA8)))
   }
 
-  private def setMemory16fromHL(r: Registers): Registers = {
-    r.copy(regFile1 = r.setBaseReg16(RegNames.M16, r.getReg16(RegNames.H)))
+  private def setMemory16fromHL(r: Registers, addr: Int): Registers = {
+    val rf1 = r.setBaseReg16(RegNames.DATA16, r.getReg16(RegNames.H))
+    r.copy(regFile1 = rf1.copy(wz = Option(addr)))
   }
 
-  private def setMemory16fromIX(r: Registers): Registers = {
-    r.copy(regFile1 = r.setBaseReg16(RegNames.M16, r.getReg16(RegNames.IX)))
+  private def setMemory16fromIX(r: Registers, addr: Int): Registers = {
+    val rf1 = r.setBaseReg16(RegNames.DATA16, r.getReg16(RegNames.IX))
+    r.copy(regFile1 = rf1.copy(wz = Option(addr)))
   }
 
-  private def setMemory16fromIY(r: Registers): Registers = {
-    r.copy(regFile1 = r.setBaseReg16(RegNames.M16, r.getReg16(RegNames.IY)))
+  private def setMemory16fromIY(r: Registers, addr: Int): Registers = {
+    val rf1 = r.setBaseReg16(RegNames.DATA16, r.getReg16(RegNames.IY))
+    r.copy(regFile1 = rf1.copy(wz = Option(addr)))
   }
 
   private def setHLfromMemory16(r: Registers): Registers = {
-    r.copy(regFile1 = r.setBaseReg16(RegNames.H, r.getReg16(RegNames.M16)))
+    r.copy(regFile1 = r.setBaseReg16(RegNames.H, r.getReg16(RegNames.DATA16)))
   }
 
   private def setIXfromMemory16(r: Registers): Registers = {
-    r.copy(indexRegisters = r.setIndexReg(RegNames.IX, r.getReg16(RegNames.M16)))
+    r.copy(indexRegisters = r.setIndexReg(RegNames.IX, r.getReg16(RegNames.DATA16)))
   }
 
   private def setIYfromMemory16(r: Registers): Registers = {
-    r.copy(indexRegisters = r.setIndexReg(RegNames.IY, r.getReg16(RegNames.M16)))
+    r.copy(indexRegisters = r.setIndexReg(RegNames.IY, r.getReg16(RegNames.DATA16)))
   }
 
   private def getOverflowFlagAdd(left: Int, right: Int): Boolean = {
