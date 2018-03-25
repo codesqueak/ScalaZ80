@@ -4,7 +4,7 @@ package object CPUZ {
 
   object RegNames extends Enumeration {
     type RegName = Value
-    val A, F, B, C, D, E, H, L, IX, IY, SP, PC, R, INST, DATA8, DATA16, WZ, X, Y, Z, P, Q = Value
+    val A, F, B, C, D, E, H, L, IX, IY, IXIYH, IXIYL, SP, PC, R, INST, DATA8, DATA16, WZ, X, Y, Z, P, Q = Value
   }
 
   class RegInt(val v: Int) {

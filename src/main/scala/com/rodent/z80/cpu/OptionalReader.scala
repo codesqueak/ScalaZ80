@@ -55,7 +55,8 @@ trait OptionalReader {
       }
     else if (r.internalRegisters.ed) {
       r.internalRegisters.x match {
-        case 1 if (r.internalRegisters.z == 3) && (r.internalRegisters.q == 0) => loadImmediate16(r) // LD (nn), rp[p]
+        case 1 if (r.internalRegisters.z == 3) && (r.internalRegisters.q == 0) =>
+          loadImmediate16(r) // LD (nn), rp[p]
         case 1 if (r.internalRegisters.z == 3) && (r.internalRegisters.q == 1) =>
           load16atNN(r) // LD (nn), rp[p]
         //
@@ -70,10 +71,11 @@ trait OptionalReader {
       }
     }
     else if (r.internalRegisters.dd || r.internalRegisters.fd) {
-      if (r.internalRegisters.cb)
+      if (r.internalRegisters.cb) {
         r // // opcode for dd cb offset opcode
+      }
       else if (r.internalRegisters.inst == 0xCB)
-        loadImmediate8(r) // offset for dd cb offset opcode
+        loadImmediate8CBIXIY(r) // offset for dd cb offset opcode
       else {
         r.internalRegisters.x match {
           case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r) // LD IXIY,NN
@@ -95,7 +97,6 @@ trait OptionalReader {
     else
       throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + "Optional reader state error")
   }
-
 
   // Load byte at (HL)
   private def load8atHL(registers: Registers): Registers = {
@@ -163,6 +164,20 @@ trait OptionalReader {
       addr = (r.getReg16(RegNames.IY) + addr).limit16
     r.copy(regFile1 = r.regFile1.copy(data16 = Option(addr)))
     loadImmediate8(r) // get n
+  }
+
+
+  // Load 8 bit value following instruction
+  // save calculated target address into data16 and load value from memory
+  private def loadImmediate8CBIXIY(registers: Registers): Registers = {
+    val r = loadImmediate8(registers) // get dd offset
+    var addr = r.getReg(RegNames.DATA8)
+    if (addr > 127) addr = addr - 256
+    if (r.internalRegisters.dd)
+      addr = (r.getReg16(RegNames.IX) + addr).limit16
+    else
+      addr = (r.getReg16(RegNames.IY) + addr).limit16
+    r.copy(regFile1 = r.regFile1.copy(data16 = Option(addr), data8 = Option(memory.getMemory(addr))))
   }
 
   // Load 16 bit value following instruction

@@ -9,11 +9,16 @@ import com.rodent.z80.io.Memory
 trait Fetch {
 
   val memory: Memory
+  var count = 0
 
   def fetch(registers: Registers): Registers = {
     var pc = registers.getPC
     val ir = registers.internalRegisters.copy(inst = memory.getMemory(pc))
-    println("Execute @" + Utils.toHex16(registers.getPC) + " : " + Utils.toHex8(ir.inst) + " SP:" + Utils.toHex16(registers.getSP) + regs(registers))
+    if (ir.single) {
+      //    println(count+" >> Execute @" + Utils.toHex16(registers.getPC) + " : " + Utils.toHex8(ir.inst) + " SP:" + Utils.toHex16(registers.getSP) + regs(registers))
+      count += 1
+      //  if (count > 5498) System.exit(0)
+    }
     pc = (pc + 1) & 0xFFFF
     val cr = registers.controlRegisters.copy(pc = pc)
     registers.copy(internalRegisters = ir, controlRegisters = cr)

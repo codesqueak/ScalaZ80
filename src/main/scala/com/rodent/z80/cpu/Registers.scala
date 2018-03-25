@@ -52,6 +52,14 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def fd: Boolean = internalRegisters.fd
 
+  def single: Boolean = internalRegisters.single
+
+  def halt: Boolean = internalRegisters.halt
+
+  def setHalt: InternalRegisters = {
+    internalRegisters.copy(halt = true)
+  }
+
   // reg get
   private def getSafeReg(reg: RegName): Option[Int] = {
     reg match {
@@ -72,6 +80,10 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.DATA16 => regFile1.data16
       case RegNames.WZ => regFile1.wz
       case RegNames.INST => Option(internalRegisters.inst)
+      case RegNames.IXIYH if dd => Option((indexRegisters.ix & 0xFF00) >> 8)
+      case RegNames.IXIYL if dd => Option(indexRegisters.ix & 0x00FF)
+      case RegNames.IXIYH if fd => Option((indexRegisters.iy & 0xFF00) >> 8)
+      case RegNames.IXIYL if fd => Option(indexRegisters.iy & 0x00FF)
       case _ => None
     }
   }

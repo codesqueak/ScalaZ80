@@ -22,7 +22,6 @@ class BasicTest extends FlatSpec with Matchers {
     memory
   }
 
-
   "Memory" should "reset correctly" in {
     var memory = new Memory()
     memory = loadMemory(memory, "NAS_Test.nas")
@@ -36,6 +35,5 @@ class BasicTest extends FlatSpec with Matchers {
 
     cpu.run(0x1000);
   }
-
 
 }
