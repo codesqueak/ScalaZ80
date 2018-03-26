@@ -75,16 +75,19 @@ trait OptionalReader {
         r // // opcode for dd cb offset opcode
       }
       else if (r.internalRegisters.inst == 0xCB)
-        loadImmediate8CBIXIY(r) // offset for dd cb offset opcode
+        loadOffset8CBIXIY(r) // offset for dd cb offset opcode
       else {
         r.internalRegisters.x match {
           case 0 if r.internalRegisters.inst == 0x21 => loadImmediate16(r) // LD IXIY,NN
+          case 0 if r.internalRegisters.inst == 0x22 => loadImmediate16(r) // LD (nnnn), IXIY
           case 0 if r.internalRegisters.inst == 0x2A => load16atNN(r) // LD IXIY, (nn)
           case 0 if (r.internalRegisters.z == 4) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // inc (ixiy)
           case 0 if (r.internalRegisters.z == 5) && (r.internalRegisters.y == atHL) => load8atIXIY(r) // dec (ixiy)
-          case 0 if r.internalRegisters.z == 6 => loadImmediate8IXIY(r) // ld (ixiy+dd),n
+          case 0 if (r.internalRegisters.z == 6) && (r.internalRegisters.y == atHL) => loadImmediate8IXIY(r) // ld (ixiy+dd),n
+          case 0 if r.internalRegisters.z == 6 => loadImmediate8(r) // ld r,n
           //
           case 1 if r.internalRegisters.z == atHL => load8atIXIY(r)
+          case 1 if r.internalRegisters.y == atHL => load8atIXIY(r)
           //
           case 2 if r.internalRegisters.z == atHL => load8atIXIY(r)
           //
@@ -162,14 +165,14 @@ trait OptionalReader {
       addr = (r.getReg16(RegNames.IX) + addr).limit16
     else
       addr = (r.getReg16(RegNames.IY) + addr).limit16
-    r.copy(regFile1 = r.regFile1.copy(data16 = Option(addr)))
-    loadImmediate8(r) // get n
+    val r2 = r.copy(regFile1 = r.regFile1.copy(data16 = Option(addr)))
+    loadImmediate8(r2) // get n
   }
 
 
   // Load 8 bit value following instruction
   // save calculated target address into data16 and load value from memory
-  private def loadImmediate8CBIXIY(registers: Registers): Registers = {
+  private def loadOffset8CBIXIY(registers: Registers): Registers = {
     val r = loadImmediate8(registers) // get dd offset
     var addr = r.getReg(RegNames.DATA8)
     if (addr > 127) addr = addr - 256

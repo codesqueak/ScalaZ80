@@ -11,7 +11,11 @@ trait OptionalWriter {
 
   def write(r: Registers): Registers = {
     if (r.regFile1.wz.isDefined) {
-      if (r.regFile1.data8.isDefined) {
+      if (r.regFile1.data8.isDefined && r.regFile1.data16.isDefined) {
+        dump(r.getPC)
+        throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " d8 and d16 both set")
+      }
+      else if (r.regFile1.data8.isDefined) {
         memory.setMemory(r.regFile1.wz.get, r.regFile1.data8.get)
         //    println("writing " + Utils.toHex8(r.regFile1.data8.get) + " to " + Utils.toHex16(r.regFile1.wz))
         r.copy(regFile1 = r.regFile1.copy(data8 = None, data16 = None, wz = None))
@@ -26,6 +30,12 @@ trait OptionalWriter {
     }
     else
       r
+  }
+
+  def dump(addr: Int): Unit = {
+    for (a <- (addr - 8) to (addr + 8)) {
+      println(Utils.toHex16(a) + " : " + Utils.toHex8(memory.getMemory(a)))
+    }
   }
 }
 

@@ -15,9 +15,10 @@ trait Fetch {
     var pc = registers.getPC
     val ir = registers.internalRegisters.copy(inst = memory.getMemory(pc))
     if (ir.single) {
-      //    println(count+" >> Execute @" + Utils.toHex16(registers.getPC) + " : " + Utils.toHex8(ir.inst) + " SP:" + Utils.toHex16(registers.getSP) + regs(registers))
+      //     println(count+" >> Execute @" + Utils.toHex16(registers.getPC) + " : " + Utils.toHex8(ir.inst) + " SP:" + Utils.toHex16(registers.getSP) + regs(registers))
+      //     println(Utils.toHex16(registers.getPC) + ":" + Utils.toHex8(ir.inst))
       count += 1
-      //  if (count > 5498) System.exit(0)
+      //        if (count > 1000) System.exit(0)
     }
     pc = (pc + 1) & 0xFFFF
     val cr = registers.controlRegisters.copy(pc = pc)
