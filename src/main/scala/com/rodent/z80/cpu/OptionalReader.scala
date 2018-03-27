@@ -61,10 +61,16 @@ trait OptionalReader {
           load16atNN(r) // LD (nn), rp[p]
         //
         case _ => r.internalRegisters.inst match {
+          case 0x67 => load8atHL(r) // rrd
+          case 0x6F => load8atHL(r) // rld
           case 0xA0 => load8atHL(r)
+          case 0xA1 => load8atHL(r)
           case 0xA8 => load8atHL(r)
+          case 0xA9 => load8atHL(r)
           case 0xB0 => load8atHL(r)
+          case 0xB1 => load8atHL(r)
           case 0xB8 => load8atHL(r)
+          case 0xB9 => load8atHL(r)
           //
           case _ => r
         }
@@ -96,7 +102,10 @@ trait OptionalReader {
       }
     }
     else if (r.internalRegisters.cb)
-      r
+      if (r.internalRegisters.z == atHL)
+        load8atHL(r)
+      else
+        r
     else
       throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + "Optional reader state error")
   }

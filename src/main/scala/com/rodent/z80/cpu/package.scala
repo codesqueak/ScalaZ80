@@ -21,14 +21,14 @@ package object CPUZ {
 
     def msb: Int = (v & 0x00FF00) >>> 8
 
-    def limit8: Int = v & 0xFF
+    def limit8: Int = v & 0x00FF
 
     def limit16: Int = v & 0xFFFF
 
     // flag status
-    def f5: Option[Boolean] = Some((v & 0x20) != 0)
+    def f5: Option[Boolean] = Option((v & 0x20) != 0)
 
-    def f3: Option[Boolean] = Some((v & 0x08) != 0)
+    def f3: Option[Boolean] = Option((v & 0x08) != 0)
   }
 
   implicit def regInt(v: Int): RegInt = new RegInt(v)
