@@ -472,7 +472,7 @@ trait ALU {
   // standard 8 bit add/adc src,dst instrucitons
   private def addAdc8(registers: Registers, adc: Boolean): Registers = {
     val srcReg = registers.internalRegisters.z
-    val src = registers.getReg(reg8Bit(srcReg))
+    val src = if (registers.dd || registers.fd) registers.getReg(reg8BitIXIY(srcReg)) else registers.getReg(reg8Bit(srcReg))
     val carry = adc && registers.isC
     val raw = registers.getA + src + (if (carry) 1 else 0)
     val v = raw.limit8
@@ -491,7 +491,7 @@ trait ALU {
   // standard 8 bit sub/sbc src,dst instrucitons
   private def subSbc8(registers: Registers, sbc: Boolean): Registers = {
     val srcReg = registers.internalRegisters.z
-    val src = registers.getReg(reg8Bit(srcReg))
+    val src = if (registers.dd || registers.fd) registers.getReg(reg8BitIXIY(srcReg)) else registers.getReg(reg8Bit(srcReg))
     val carry = sbc && registers.isC
     val raw = registers.getA - src - (if (carry) 1 else 0)
     val v = raw.limit8
@@ -510,7 +510,7 @@ trait ALU {
   // standard 8 bit cp src,dst instrucitons
   private def cp8(registers: Registers): Registers = {
     val srcReg = registers.internalRegisters.z
-    val src = registers.getReg(reg8Bit(srcReg))
+    val src = if (registers.dd || registers.fd) registers.getReg(reg8BitIXIY(srcReg)) else registers.getReg(reg8Bit(srcReg))
     val raw = registers.getA - src
     val v = raw.limit8
     //
@@ -528,7 +528,7 @@ trait ALU {
   // standard 8 bit and src,dst instructions
   private def andOrXor8(registers: Registers, y: Int, h: Boolean, f: (Int, Int) => Int): Registers = {
     val srcReg = registers.internalRegisters.z
-    val src = registers.getReg(reg8Bit(srcReg))
+    val src = if (registers.dd || registers.fd) registers.getReg(reg8BitIXIY(srcReg)) else registers.getReg(reg8Bit(srcReg))
     val v = f(registers.getA, src)
     //
     val s = (v & 0x80) != 0
@@ -793,19 +793,22 @@ trait ALU {
       case 1 =>
         load8IXIY(r)
       case 2 =>
-        r.internalRegisters.inst match {
-          // add/adc/sub/sbc/and/xor/or/cp
-          case 0x86 => addAdc8(r, adc = false)
-          case 0x8E => addAdc8(r, adc = true)
-          case 0x96 => subSbc8(r, sbc = false)
-          case 0x9E => subSbc8(r, sbc = true)
-          case 0xA6 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r)
-          case 0xA6 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r)
-          case 0xAE => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r)
-          case 0xB6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r)
-          case 0xBE => cp8(r)
-          case _ => throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (ddfd): " + Utils.toHex8(r.internalRegisters.inst))
+        // add/adc/sub/sbc/and/xor/or/cp
+        if (r.internalRegisters.z == 4 || r.internalRegisters.z == 5 || r.internalRegisters.z == 6) {
+          r.internalRegisters.y match {
+            case 0 => addAdc8(r, adc = false)
+            case 1 => addAdc8(r, adc = true)
+            case 2 => subSbc8(r, sbc = false)
+            case 3 => subSbc8(r, sbc = true)
+            case 4 => andOrXor8(r, r.internalRegisters.y, h = true, (l: Int, r: Int) => l & r)
+            case 5 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l | r)
+            case 6 => andOrXor8(r, r.internalRegisters.y, h = false, (l: Int, r: Int) => l ^ r)
+            case 7 => cp8(r)
+          }
         }
+        else
+          throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (ddfd): " + Utils.toHex8(r.internalRegisters.inst))
+
       case 3 =>
         r.internalRegisters.inst match {
           case 0xCB => {
@@ -1119,6 +1122,43 @@ trait ALU {
 
   private def executeEDBlock1(r: Registers): Registers = {
     r.internalRegisters.z match {
+      case 2 => {
+        val rh = r.getReg16(reg16Bit(r.p))
+        val hl = r.getReg16(RegNames.H)
+        val cv = if (r.isC) 1 else 0
+        if (r.q == 0) {
+          // sbc hl,rr
+          val raw = hl - rh - cv
+          val s = (raw & 0x8000) != 0
+          val f3 = (raw & 0x0800) != 0
+          val f5 = (raw & 0x2000) != 0
+          val c = raw < 0
+          val res = raw & 0xFFFF
+          val z = res == 0
+          val n = true
+          val h = (hl & 0x0fff) < (rh & 0x0fff) + cv
+          val pv = getOverflowFlagSub16(hl, rh, r.isC)
+          //
+          val rf1 = r.setFlags(sf = Some(s), f3f = Some(f3), f5f = Some(f5), cf = Some(c), zf = Some(z), nf = Some(n), hf = Some(h), pvf = Some(pv))
+          r.copy(regFile1 = rf1.copy(h = res.msb, l = res.lsb))
+        }
+        else {
+          // adc hl,rr
+          val raw = hl + rh + cv
+          val s = (raw & 0x8000) != 0
+          val f3 = (raw & 0x0800) != 0
+          val f5 = (raw & 0x2000) != 0
+          val c = raw > 0xFFFF
+          val res = raw & 0xFFFF
+          val z = res == 0
+          val n = false
+          val h = (hl & 0x0fff) + (rh & 0x0fff) + cv > 0x1000
+          val pv = getOverflowFlagAdd16(hl, rh, r.isC)
+          //
+          val rf1 = r.setFlags(sf = Some(s), f3f = Some(f3), f5f = Some(f5), cf = Some(c), zf = Some(z), nf = Some(n), hf = Some(h), pvf = Some(pv))
+          r.copy(regFile1 = rf1.copy(h = res.msb, l = res.lsb))
+        }
+      }
       case 3 => //
         if (r.internalRegisters.q == 0) {
           memory.setMemory16(r.getReg16(RegNames.DATA16), r.getReg16(reg16Bit(r.internalRegisters.p)))
@@ -1324,26 +1364,19 @@ trait ALU {
       throw new UndefOpcode("Addr: " + Utils.toHex16(r.getPC) + " inst (dd cb): " + Utils.toHex8(r.internalRegisters.inst))
   }
 
-
   // helpers - helpers - helpers
   // helpers - helpers - helpers
   // helpers - helpers - helpers
 
-  private def setMemory8fromA(r: Registers, addr: Int): Registers
-
-  = {
+  private def setMemory8fromA(r: Registers, addr: Int): Registers = {
     r.copy(regFile1 = r.regFile1.copy(data8 = Option(r.getA), data16 = None, wz = Option(addr)))
   }
 
-  private def setAfromMemory8(r: Registers): Registers
-
-  = {
+  private def setAfromMemory8(r: Registers): Registers = {
     r.copy(regFile1 = r.setBaseReg(RegNames.A, r.getReg(RegNames.DATA8)))
   }
 
-  private def setMemory16fromHL(r: Registers, addr: Int): Registers
-
-  = {
+  private def setMemory16fromHL(r: Registers, addr: Int): Registers = {
     val rf1 = r.setBaseReg16(RegNames.DATA16, r.getReg16(RegNames.H))
     r.copy(regFile1 = rf1.copy(data8 = None, wz = Option(addr)))
   }
@@ -1368,28 +1401,20 @@ trait ALU {
     r.copy(regFile1 = r.setBaseReg16(RegNames.H, r.getReg16(RegNames.DATA16)))
   }
 
-  private def setIXfromMemory16(r: Registers): Registers
-
-  = {
+  private def setIXfromMemory16(r: Registers): Registers = {
     r.copy(indexRegisters = r.setIndexReg(RegNames.IX, r.getReg16(RegNames.DATA16)))
   }
 
-  private def setIYfromMemory16(r: Registers): Registers
-
-  = {
+  private def setIYfromMemory16(r: Registers): Registers = {
     r.copy(indexRegisters = r.setIndexReg(RegNames.IY, r.getReg16(RegNames.DATA16)))
   }
 
-  private def getOverflowFlagAdd(left: Int, right: Int): Boolean
-
-  = {
+  private def getOverflowFlagAdd(left: Int, right: Int): Boolean = {
     getOverflowFlagAdd(left, right, carry = false)
   }
 
   /* pverflow flag control */
-  private def getOverflowFlagAdd(left: Int, right: Int, carry: Boolean): Boolean
-
-  = {
+  private def getOverflowFlagAdd(left: Int, right: Int, carry: Boolean): Boolean = {
     var l = left
     var r = right
     if (l > 127) l = l - 256
@@ -1399,9 +1424,7 @@ trait ALU {
     (l < -128) || (l > 127)
   }
 
-  private def getOverflowFlagSub(left: Int, right: Int): Boolean
-
-  = {
+  private def getOverflowFlagSub(left: Int, right: Int): Boolean = {
     getOverflowFlagSub(left, right, carry = false)
   }
 
@@ -1415,6 +1438,31 @@ trait ALU {
     if (carry) l -= 1
     (l < -128) || (l > 127)
   }
+
+  /* 2's compliment overflow flag control */
+  private def getOverflowFlagAdd16(left: Int, right: Int, carry: Boolean): Boolean = {
+    var l = left
+    var r = right
+    if (left > 32767)
+      l = l - 65536
+    if (r > 32767)
+      r = r - 65536
+    l = l + r + (if (carry) 1 else 0)
+    (left < -32768) || (left > 32767)
+  }
+
+  /* 2's compliment overflow flag control */
+  private def getOverflowFlagSub16(left: Int, right: Int, carry: Boolean): Boolean = {
+    var l = left
+    var r = right
+    if (l > 32767)
+      l = l - 65536
+    if (r > 32767)
+      r = r - 65536
+    l = l - r - (if (carry) 1 else 0)
+    (left < -32768) || (left > 32767)
+  }
+
 
   /* half carry flag control */
   private def getHalfCarryFlagAdd(left: Int, right: Int, carry: Boolean) = {
