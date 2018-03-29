@@ -33,7 +33,9 @@ class BasicTest extends FlatSpec with Matchers {
     val ports = new Ports()
     val cpu = new Processor(memory, ports, Registers())
 
-    cpu.run(0x1000);
+    val t = System.currentTimeMillis()
+    cpu.run(0x1000)
+    print("Exec time: " + ((System.currentTimeMillis() - t) / 1000) + "s")
   }
 
 }
