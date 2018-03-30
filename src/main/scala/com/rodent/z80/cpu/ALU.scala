@@ -259,8 +259,8 @@ trait ALU {
   // rrca
   private def rrca(r: Registers): Registers = {
     val c = (r.getA & 0x01) != 0
-    var v = r.getA >> 1
-    if (c) v = v | 0x80
+    var v = r.getA >>> 1
+    if (c) v = v | 0x80 else v = v & 0x7f
     r.copy(regFile1 = r.setResultA(v, cf = Option(c), f5f = v.f5, f3f = v.f3, hf = RESET_FLAG, nf = RESET_FLAG))
   }
 
@@ -276,7 +276,7 @@ trait ALU {
   private def rra(r: Registers): Registers = {
     val c = (r.getA & 0x01) != 0
     var a = r.getA >>> 1
-    if (r.isC) a += 1
+    if (r.isC) a = a | 0x80
     r.copy(regFile1 = r.setResultA(a, cf = Option(c), f5f = a.f5, f3f = a.f3, hf = RESET_FLAG, nf = RESET_FLAG))
   }
 
@@ -300,38 +300,34 @@ trait ALU {
 
   // DAA is weird, can't find Zilog algorithm so using +0110 if Nibble>9 algorithm.
   private def daa(r: Registers): Registers = {
-    var a = r.getA
+    val a = r.getA
     var incr = 0
+    var carry = r.isC
     if (r.isH || ((a & 0x00F) > 0x09)) incr = 0x06
     if (r.isC || (a > 0x9f) || ((a > 0x8f) && ((a & 0x0f) > 0x09))) incr = incr | 0x60
-    var carry = r.isC
     if (a > 0x99) carry = true
     //
     if (r.isN) {
       // sub
-      val raw = r.getA - incr
-      val v = raw.limit8
+      val v = (a - incr).limit8
+      val h = getHalfCarryFlagSub(a, incr, carry = false)
       //
-      val s = (raw & 0x80) != 0
+      val s = (v & 0x80) != 0
       val z = v == 0
-      val h = getHalfCarryFlagSub(r.getA, incr, carry = false)
-      val pv = getOverflowFlagSub(r.getA, incr, carry = false)
-      val c = 0 != (raw & 0xFF)
+      val pv = getParityFlag(v)
       //
-      r.copy(regFile1 = r.setResultA(a, sf = Option(s), zf = Option(z), hf = Option(h), f3f = v.f3, f5f = v.f5, cf = Option(c), pvf = Option(pv)))
+      r.copy(regFile1 = r.setResultA(a, sf = Option(s), zf = Option(z), hf = Option(h), f3f = v.f3, f5f = v.f5, cf = Option(carry), pvf = Option(pv)))
     }
     else {
       // add
-      val raw = r.getA + incr
-      val v = raw.limit8
-      //
-      val s = (raw & 0x80) != 0
-      val z = v == 0
+      val v = (a + incr).limit8
       val h = getHalfCarryFlagAdd(r.getA, incr, carry = false)
-      val pv = getOverflowFlagAdd(r.getA, incr, carry = false)
-      val c = 0 != (raw & 0xFF)
       //
-      r.copy(regFile1 = r.setResultA(a, sf = Option(s), zf = Option(z), hf = Option(h), f3f = v.f3, f5f = v.f5, cf = Option(c), pvf = Option(pv)))
+      val s = (v & 0x80) != 0
+      val z = v == 0
+      val pv = getParityFlag(v)
+      //
+      r.copy(regFile1 = r.setResultA(a, sf = Option(s), zf = Option(z), hf = Option(h), f3f = v.f3, f5f = v.f5, cf = Option(carry), pvf = Option(pv)))
     }
   }
 
@@ -482,17 +478,17 @@ trait ALU {
     val srcReg = registers.internalRegisters.z
     val src = if (registers.dd || registers.fd) registers.getReg(reg8BitIXIY(srcReg)) else registers.getReg(reg8Bit(srcReg))
     val carry = adc && registers.isC
+    //
+    val h = getHalfCarryFlagAdd(registers.getA, src, carry)
+    val pv = getOverflowFlagAdd(registers.getA, src, carry)
     val raw = registers.getA + src + (if (carry) 1 else 0)
     val v = raw.limit8
     //
-    val s = (raw & 0x80) != 0
+    val s = (v & 0x80) != 0
     val z = v == 0
-    val h = getHalfCarryFlagAdd(registers.getA, src, carry)
-    val pv = getOverflowFlagAdd(registers.getA, src, carry)
-    val n = false
     val c = raw > 0xFF
     //
-    registers.copy(regFile1 = registers.setResultA(v, sf = Option(s), zf = Option(z), f5f = v.f5, hf = Option(h), f3f = v.f3, pvf = Option(pv), nf = Option(n), cf = Option(c))
+    registers.copy(regFile1 = registers.setResultA(v, sf = Option(s), zf = Option(z), f5f = v.f5, hf = Option(h), f3f = v.f3, pvf = Option(pv), nf = Option(false), cf = Option(c))
     )
   }
 
@@ -501,17 +497,17 @@ trait ALU {
     val srcReg = registers.internalRegisters.z
     val src = if (registers.dd || registers.fd) registers.getReg(reg8BitIXIY(srcReg)) else registers.getReg(reg8Bit(srcReg))
     val carry = sbc && registers.isC
+    //
+    val h = getHalfCarryFlagSub(registers.getA, src, carry)
+    val pv = getOverflowFlagSub(registers.getA, src, carry)
     val raw = registers.getA - src - (if (carry) 1 else 0)
     val v = raw.limit8
     //
-    val s = (raw & 0x80) != 0
+    val s = (v & 0x80) != 0
     val z = v == 0
-    val h = getHalfCarryFlagSub(registers.getA, src, carry)
-    val pv = getOverflowFlagSub(registers.getA, src, carry)
-    val n = true
     val c = raw > 0xFF
     //
-    registers.copy(regFile1 = registers.setResultA(v, sf = Option(s), zf = Option(z), f5f = v.f5, hf = Option(h), f3f = v.f3, pvf = Option(pv), nf = Option(n), cf = Option(c))
+    registers.copy(regFile1 = registers.setResultA(v, sf = Option(s), zf = Option(z), f5f = v.f5, hf = Option(h), f3f = v.f3, pvf = Option(pv), nf = Option(true), cf = Option(c))
     )
   }
 
@@ -522,14 +518,13 @@ trait ALU {
     val raw = registers.getA - src
     val v = raw.limit8
     //
-    val s = (raw & 0x80) != 0
+    val s = (v & 0x80) != 0
     val z = v == 0
     val h = getHalfCarryFlagSub(registers.getA, src, carry = false)
     val pv = getOverflowFlagSub(registers.getA, src, carry = false)
-    val n = true
     val c = raw > 0xFF
     //
-    registers.copy(regFile1 = registers.setFlags(sf = Option(s), zf = Option(z), f5f = src.f5, hf = Option(h), f3f = src.f3, pvf = Option(pv), nf = Option(n), cf = Option(c))
+    registers.copy(regFile1 = registers.setFlags(sf = Option(s), zf = Option(z), f5f = src.f5, hf = Option(h), f3f = src.f3, pvf = Option(pv), nf = Option(true), cf = Option(c))
     )
   }
 
@@ -542,10 +537,8 @@ trait ALU {
     val s = (v & 0x80) != 0
     val z = v == 0
     val pv = getParityFlag(v)
-    val n = false
-    val c = false
     //
-    registers.copy(regFile1 = registers.setResultA(v, sf = Option(s), zf = Option(z), f5f = v.f5, hf = Option(h), f3f = v.f3, pvf = Option(pv), nf = Option(n), cf = Option(c))
+    registers.copy(regFile1 = registers.setResultA(v, sf = Option(s), zf = Option(z), f5f = v.f5, hf = Option(h), f3f = v.f3, pvf = Option(pv), nf = Option(false), cf = Option(false))
     )
   }
 
@@ -617,7 +610,6 @@ trait ALU {
     val r = regs.copy(internalRegisters = regs.internalRegisters.copy(cb = false))
     r.internalRegisters.x match {
       case 0 => // rot[y] r[z]
-
         r.internalRegisters.y match {
           case 0 => // rlc
             val reg = reg8Bit(r.internalRegisters.z)
@@ -1040,45 +1032,40 @@ trait ALU {
     val hl = r.getReg16(RegNames.H).inc16
     val bc = r.getReg16(RegNames.B).dec16
     var flags = (r.getReg(RegNames.F) & 0x01) | 0x02 // c = unchanged, n=1
-    //
-    val raw = r.getA - r.getReg(RegNames.DATA8)
-    var v = raw.limit8
+    var v = (r.getA - r.getReg(RegNames.DATA8)).limit8
     flags = flags | (v & 0x80) // s
     if (v == 0) flags = flags | 0x40 // z
     val h = getHalfCarryFlagSub(r.getA, r.getReg(RegNames.DATA8), carry = false)
     //
     if (h) {
-      v -= 1
+      v = v - 1
       flags = flags | 0x10 // h
     }
-    if ((v & 0x02) != 0) flags = flags | 0x20 // weird
-    if ((v & 0x08) != 0) flags = flags | 0x08
+    if ((v & 0x08) != 0) flags = flags | 0x08 // weird f3
+    if ((v & 0x02) != 0) flags = flags | 0x20 // wierd f5
     if (bc != 0) flags = flags | 0x04 // pv
     r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, b = bc.msb, c = bc.lsb)
   }
-
 
   private def cpd(r: Registers): BaseRegisters = {
     val hl = r.getReg16(RegNames.H).dec16
     val bc = r.getReg16(RegNames.B).dec16
     var flags = (r.getReg(RegNames.F) & 0x01) | 0x02 // c = unchanged, n=1
+    var v = (r.getA - r.getReg(RegNames.DATA8)).limit8
     //
-    val raw = r.getA - r.getReg(RegNames.DATA8)
-    var v = raw.limit8
     flags = flags | (v & 0x80) // s
     if (v == 0) flags = flags | 0x40 // z
     val h = getHalfCarryFlagSub(r.getA, r.getReg(RegNames.DATA8), carry = false)
     //
     if (h) {
-      v -= 1
+      v = v - 1
       flags = flags | 0x10 // h
     }
-    if ((v & 0x02) != 0) flags = flags | 0x20 // weird
-    if ((v & 0x08) != 0) flags = flags | 0x08
+    if ((v & 0x08) != 0) flags = flags | 0x08 // weird f3
+    if ((v & 0x02) != 0) flags = flags | 0x20 // wierd f5
     if (bc != 0) flags = flags | 0x04 // pv
     r.regFile1.copy(f = flags, h = hl.msb, l = hl.lsb, b = bc.msb, c = bc.lsb)
   }
-
 
   private def executeED(r: Registers): Registers = {
     if (1 == r.internalRegisters.x)
@@ -1100,7 +1087,8 @@ trait ALU {
         case 0xB1 => {
           // CPIR
           val rf1 = cpi(r)
-          if ((0 != rf1.b) || (0 != rf1.c))
+          val z = (rf1.f & 0x40) != 0
+          if (!z && ((0 != rf1.b) || (0 != rf1.c)))
             r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
           else
             r.copy(regFile1 = rf1)
@@ -1116,7 +1104,8 @@ trait ALU {
         case 0xB9 => {
           // CPDR
           val rf1 = cpd(r)
-          if ((0 != rf1.b) || (0 != rf1.c))
+          val z = (rf1.f & 0x40) != 0
+          if (!z && ((0 != rf1.b) || (0 != rf1.c)))
             r.copy(regFile1 = rf1, controlRegisters = r.controlRegisters.copy(pc = r.controlRegisters.pc.dec16.dec16))
           else
             r.copy(regFile1 = rf1)
@@ -1135,33 +1124,33 @@ trait ALU {
         if (r.q == 0) {
           // sbc hl,rr
           val raw = hl - rh - cv
-          val s = (raw & 0x8000) != 0
-          val f3 = (raw & 0x0800) != 0
-          val f5 = (raw & 0x2000) != 0
-          val c = raw < 0
           val res = raw & 0xFFFF
+          //
+          val s = (res & 0x8000) != 0
+          val f3 = (res & 0x0800) != 0
+          val f5 = (res & 0x2000) != 0
           val z = res == 0
-          val n = true
-          val h = (hl & 0x0fff) < (rh & 0x0fff) + cv
+          val c = raw < 0
+          val h = (((hl & 0x0fff) - (rh & 0x0fff) - cv) & 0x1000) != 0
           val pv = getOverflowFlagSub16(hl, rh, r.isC)
           //
-          val rf1 = r.setFlags(sf = Option(s), f3f = Option(f3), f5f = Option(f5), cf = Option(c), zf = Option(z), nf = Option(n), hf = Option(h), pvf = Option(pv))
+          val rf1 = r.setFlags(sf = Option(s), f3f = Option(f3), f5f = Option(f5), cf = Option(c), zf = Option(z), nf = Option(true), hf = Option(h), pvf = Option(pv))
           r.copy(regFile1 = rf1.copy(h = res.msb, l = res.lsb))
         }
         else {
           // adc hl,rr
           val raw = hl + rh + cv
-          val s = (raw & 0x8000) != 0
-          val f3 = (raw & 0x0800) != 0
-          val f5 = (raw & 0x2000) != 0
-          val c = raw > 0xFFFF
           val res = raw & 0xFFFF
+          //
+          val s = (res & 0x8000) != 0
+          val f3 = (res & 0x0800) != 0
+          val f5 = (res & 0x2000) != 0
           val z = res == 0
-          val n = false
-          val h = (hl & 0x0fff) + (rh & 0x0fff) + cv > 0x1000
+          val c = raw > 0xFFFF
+          val h = (((hl & 0x0fff) + (rh & 0x0fff) + cv) & 0x1000) != 0
           val pv = getOverflowFlagAdd16(hl, rh, r.isC)
           //
-          val rf1 = r.setFlags(sf = Option(s), f3f = Option(f3), f5f = Option(f5), cf = Option(c), zf = Option(z), nf = Option(n), hf = Option(h), pvf = Option(pv))
+          val rf1 = r.setFlags(sf = Option(s), f3f = Option(f3), f5f = Option(f5), cf = Option(c), zf = Option(z), nf = Option(false), hf = Option(h), pvf = Option(pv))
           r.copy(regFile1 = rf1.copy(h = res.msb, l = res.lsb))
         }
       }
@@ -1271,16 +1260,16 @@ trait ALU {
         v = v.limit8
         val s = (v & 0x80) != 0
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 1 => // rrc
         val c = (v & 0x01) != 0
         v = v >>> 1
         if (c) v = v | 0x80
-        val s = c
+        val s = (v & 0x80) != 0
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 2 => // rl
@@ -1290,16 +1279,16 @@ trait ALU {
         v = v.limit8
         val s = (v & 0x80) != 0
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 3 => // rr
         val c = (v & 0x01) != 0
         v = v >>> 1
         if (r.isC) v = v | 0x80
-        val s = c
+        val s = (v & 0x80) != 0
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 4 => // sla
@@ -1308,7 +1297,7 @@ trait ALU {
         v = v.limit8
         val s = (v & 0x80) != 0
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 5 => // sra
@@ -1317,7 +1306,7 @@ trait ALU {
         v = v >>> 1
         if (s) v = v | 0x80
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 6 => // sll
@@ -1326,7 +1315,7 @@ trait ALU {
         v = v.limit8
         val s = (v & 0x80) != 0
         val z = false
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
       case 7 => // srl
@@ -1334,7 +1323,7 @@ trait ALU {
         v = v >>> 1
         val s = false
         val z = v == 0
-        val pv = this.getParityFlag(v)
+        val pv = getParityFlag(v)
         val rf1 = r.setFlags(sf = Option(s), zf = Option(z), f5f = v.f5, hf = RESET_FLAG, f3f = v.f3, pvf = Option(pv), nf = RESET_FLAG, cf = Option(c))
         r.copy(regFile1 = rf1.copy(data8 = Option(v), data16 = None, wz = Option(r.getReg16(RegNames.DATA16))))
     }
@@ -1440,8 +1429,7 @@ trait ALU {
     var r = right
     if (l > 127) l = l - 256
     if (r > 127) r = r - 256
-    l = l - r
-    if (carry) l -= 1
+    l = l - r - (if (carry) 1 else 0)
     (l < -128) || (l > 127)
   }
 
@@ -1449,12 +1437,12 @@ trait ALU {
   private def getOverflowFlagAdd16(left: Int, right: Int, carry: Boolean): Boolean = {
     var l = left
     var r = right
-    if (left > 32767)
+    if (l > 32767)
       l = l - 65536
     if (r > 32767)
       r = r - 65536
     l = l + r + (if (carry) 1 else 0)
-    (left < -32768) || (left > 32767)
+    (l < -32768) || (l > 32767)
   }
 
   /* 2's compliment overflow flag control */
@@ -1466,7 +1454,7 @@ trait ALU {
     if (r > 32767)
       r = r - 65536
     l = l - r - (if (carry) 1 else 0)
-    (left < -32768) || (left > 32767)
+    (l < -32768) || (l > 32767)
   }
 
 

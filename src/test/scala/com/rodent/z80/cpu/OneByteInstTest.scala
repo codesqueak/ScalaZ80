@@ -93,4 +93,52 @@ class OneByteInstTest extends FlatSpec with Matchers {
     cpu.registers.isC should be(true)
   }
 
+
+  "add in memory" should "should change correctly" in {
+    var memory = new Memory()
+    var loc = memory.setMemory(0xC000, Array(0x21, 0x00, 0x20)) // ld hl,2000
+    loc = memory.setMemory(loc, Array(0x3e, 0x7f)) // ld a,7f
+    loc = memory.setMemory(loc, Array(0x8e)) // adc a,(hl)
+    //
+    memory.setMemory(loc, Array(0x76, 0x76, 0x76, 0x76, 0x76, 0x76, 0x76)) // halt
+    //
+    memory.setMemory(0x2000, Array(0x22)) // test data
+    //
+    // Ok, run the program
+    val ports = new Ports()
+    val cpu = new Processor(memory, ports, Registers())
+    cpu.registers = cpu.registers.copy(regFile1 = cpu.registers.setFlags(cf = Option(true)))
+    cpu.run(0xC000)
+    //
+    cpu.registers.getReg(RegNames.A) should be(0xa2)
+    cpu.registers.getReg16(RegNames.H) should be(0x2000)
+    //
+    memory.getMemory(0x2000) should be(0x22)
+    //
+  }
+
+  "sbc in memory" should "should change correctly" in {
+    var memory = new Memory()
+    var loc = memory.setMemory(0xC000, Array(0x21, 0x00, 0x20)) // ld hl,2000
+    loc = memory.setMemory(loc, Array(0x3e, 0x11)) // ld a,11
+    loc = memory.setMemory(loc, Array(0x9e)) // sub a,(hl)
+    //
+    memory.setMemory(loc, Array(0x76, 0x76, 0x76, 0x76, 0x76, 0x76, 0x76)) // halt
+    //
+    memory.setMemory(0x2000, Array(0x12)) // test data
+    //
+    // Ok, run the program
+    val ports = new Ports()
+    val cpu = new Processor(memory, ports, Registers())
+    cpu.registers = cpu.registers.copy(regFile1 = cpu.registers.setFlags(cf = Option(true)))
+    cpu.run(0xC000)
+    //
+    cpu.registers.getReg(RegNames.A) should be(0xfe)
+    cpu.registers.getReg16(RegNames.H) should be(0x2000)
+    //
+    memory.getMemory(0x2000) should be(0x12)
+    //
+  }
+
+
 }
