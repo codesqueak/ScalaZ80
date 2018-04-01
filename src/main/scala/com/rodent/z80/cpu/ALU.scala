@@ -52,7 +52,7 @@ trait ALU {
         r.copy(internalRegisters = r.internalRegisters.copy(single = true, ed = false))
       }
       else if (regs.internalRegisters.cb)
-        if (regs.internalRegisters.dd || regs.internalRegisters.dd) {
+        if (regs.internalRegisters.dd || regs.internalRegisters.fd) {
           // dd cb nn  op
           val r = executeDDFDCB(regs)
           //     ("Reset CB DD/FD")
@@ -1230,9 +1230,7 @@ trait ALU {
   // Execute DD FD CB prefix
   // Execute DD FD CB prefix
 
-  private def executeDDFDCB(r: Registers): Registers
-
-  = {
+  private def executeDDFDCB(r: Registers): Registers = {
     //      println("executeDDFDCB " + Utils.toHex8(r.getInst))
     r.internalRegisters.x match {
       case 0 => rotateDDFDCB(r)

@@ -20,7 +20,7 @@ class Memory {
   }
 
   def getMemory(addr: Int): Int = {
-    //    println("read " + Utils.toHex8(ram(addr)) + " @ " + Utils.toHex16(addr))
+    //   println("read " + Utils.toHex8(ram(addr)) + " @ " + Utils.toHex16(addr))
     ram(addr)
   }
 
