@@ -20,12 +20,12 @@ class Memory {
   }
 
   def getMemory(addr: Int): Int = {
-    //   println("read " + Utils.toHex8(ram(addr)) + " @ " + Utils.toHex16(addr))
+    //       println("read " + Utils.toHex8(ram(addr)) + " @ " + Utils.toHex16(addr))
     ram(addr)
   }
 
   def setMemory(addr: Int, byteVal: Int): Unit = {
-    //         println("write " + Utils.toHex8(byteVal) + " @ " + Utils.toHex16(addr))
+    //           println("write " + Utils.toHex8(byteVal) + " @ " + Utils.toHex16(addr))
     ram(addr) = byteVal
   }
 

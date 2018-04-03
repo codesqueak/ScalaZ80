@@ -22,7 +22,6 @@ class InstDDFDCBTest extends FlatSpec with Matchers {
     cpu.registers.isZ should be(true)
   }
 
-
   "set (ix+dd)" should "execute correctly" in {
     var memory = new Memory()
     var loc = memory.setMemory(0xC000, Array(0xdd, 0x21, 0x00, 0x10)) // ld ix,1002
@@ -41,7 +40,6 @@ class InstDDFDCBTest extends FlatSpec with Matchers {
     memory.getMemory(0x1001) should be(0x03)
     memory.getMemory(0x1002) should be(0x03)
   }
-
 
   "reset (ix+dd)" should "execute correctly" in {
     var memory = new Memory()
