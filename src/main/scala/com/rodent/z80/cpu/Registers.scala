@@ -276,6 +276,22 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
     setBaseReg(reg, v).copy(f = flags)
   }
 
+
+  // set a register and associated flags
+  def setResult8(reg: RegName,
+                 v: Int
+                ): BaseRegisters = {
+    setBaseReg(reg, v)
+  }
+
+  // set a register and associated flags
+  def setResult8(reg: RegName,
+                 v: Int,
+                 flags: Int
+                ): BaseRegisters = {
+    setBaseReg(reg, v).copy(f = flags)
+  }
+
   // set A and associated flags
   def setResultA(v: Int,
                  sf: Option[Boolean] = None,
