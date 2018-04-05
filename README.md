@@ -6,7 +6,7 @@
 
 This is a little practice project to see how easy it is to write a ‘bit twiddling’ type of application in Scala
 
-Why 
+Why ?
 
 Short anaswer:
 
