@@ -6,9 +6,9 @@ import com.rodent.z80.func.Utils
 
 case class Registers(regFile1: BaseRegisters = BaseRegisters(),
                      regFile2: BaseRegisters = BaseRegisters(),
-                     indexRegisters: IndexRegisters = IndexRegisters(),
-                     controlRegisters: ControlRegisters = ControlRegisters(),
-                     internalRegisters: InternalRegisters = InternalRegisters()) {
+                     index: IndexRegisters = IndexRegisters(),
+                     control: ControlRegisters = ControlRegisters(),
+                     internal: InternalRegisters = InternalRegisters()) {
 
   // flag register bits
   private val s = 0x80
@@ -29,68 +29,62 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
   private val nc = c ^ 0xFF
 
   // general getters
-  def getPC: Int = controlRegisters.pc
+  def getPC: Int = control.pc
 
-  def getSP: Int = controlRegisters.sp
+  def getSP: Int = control.sp
 
-  def getInst: Int = internalRegisters.inst
+  def getInst: Int = internal.inst
 
   def getA: Int = regFile1.a
 
   // decoded instruction bit fields
-  def getDecodeInst: Int = internalRegisters.x
+  def getDecodeInst: Int = internal.x
 
-  def src: Int = internalRegisters.y
+  def src: Int = internal.y
 
-  def dst: Int = internalRegisters.z
+  def dst: Int = internal.z
 
-  def p: Int = internalRegisters.p
+  def p: Int = internal.p
 
-  def q: Int = internalRegisters.q
+  def q: Int = internal.q
 
-  def dd: Boolean = internalRegisters.dd
+  def dd: Boolean = internal.dd
 
-  def fd: Boolean = internalRegisters.fd
+  def fd: Boolean = internal.fd
 
-  def single: Boolean = internalRegisters.single
+  def single: Boolean = internal.single
 
-  def halt: Boolean = internalRegisters.halt
+  def halt: Boolean = internal.halt
 
   def setHalt: InternalRegisters = {
-    internalRegisters.copy(halt = true)
-  }
-
-  // reg get
-  private def getSafeReg(reg: RegName): Option[Int] = {
-    reg match {
-      case RegNames.A => Option(regFile1.a)
-      case RegNames.F => Option(regFile1.f)
-      case RegNames.B => Option(regFile1.b)
-      case RegNames.C => Option(regFile1.c)
-      case RegNames.D => Option(regFile1.d)
-      case RegNames.E => Option(regFile1.e)
-      case RegNames.H => Option(regFile1.h)
-      case RegNames.L => Option(regFile1.l)
-      case RegNames.DATA8 => regFile1.data8
-      case RegNames.IX => Option(indexRegisters.ix)
-      case RegNames.IY => Option(indexRegisters.iy)
-      case RegNames.PC => Option(controlRegisters.pc)
-      case RegNames.SP => Option(controlRegisters.sp)
-      case RegNames.R => Option(controlRegisters.r)
-      case RegNames.DATA16 => regFile1.data16
-      case RegNames.WZ => regFile1.wz
-      case RegNames.INST => Option(internalRegisters.inst)
-      case RegNames.IXIYH if dd => Option((indexRegisters.ix & 0xFF00) >> 8)
-      case RegNames.IXIYL if dd => Option(indexRegisters.ix & 0x00FF)
-      case RegNames.IXIYH if fd => Option((indexRegisters.iy & 0xFF00) >> 8)
-      case RegNames.IXIYL if fd => Option(indexRegisters.iy & 0x00FF)
-      case _ => None
-    }
+    internal.copy(halt = true)
   }
 
   // reg get
   def getReg(reg: RegName): Int = {
-    getSafeReg(reg).get
+    reg match {
+      case RegNames.A => regFile1.a
+      case RegNames.F => regFile1.f
+      case RegNames.B => regFile1.b
+      case RegNames.C => regFile1.c
+      case RegNames.D => regFile1.d
+      case RegNames.E => regFile1.e
+      case RegNames.H => regFile1.h
+      case RegNames.L => regFile1.l
+      case RegNames.DATA8 => regFile1.data8.get
+      case RegNames.IX => index.ix
+      case RegNames.IY => index.iy
+      case RegNames.PC => control.pc
+      case RegNames.SP => control.sp
+      case RegNames.R => control.r
+      case RegNames.DATA16 => regFile1.data16.get
+      case RegNames.WZ => regFile1.wz.get
+      case RegNames.INST => internal.inst
+      case RegNames.IXIYH if dd => (index.ix & 0xFF00) >> 8
+      case RegNames.IXIYL if dd => index.ix & 0x00FF
+      case RegNames.IXIYH if fd => (index.iy & 0xFF00) >> 8
+      case RegNames.IXIYL if fd => index.iy & 0x00FF
+    }
   }
 
   def getReg16(reg: RegName): Int = {
@@ -99,10 +93,10 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.B => (regFile1.b << 8) + regFile1.c
       case RegNames.D => (regFile1.d << 8) + regFile1.e
       case RegNames.H => (regFile1.h << 8) + regFile1.l
-      case RegNames.IX => indexRegisters.ix
-      case RegNames.IY => indexRegisters.iy
-      case RegNames.PC => controlRegisters.pc
-      case RegNames.SP => controlRegisters.sp
+      case RegNames.IX => index.ix
+      case RegNames.IY => index.iy
+      case RegNames.PC => control.pc
+      case RegNames.SP => control.sp
       case RegNames.DATA16 => regFile1.data16.get
       case RegNames.WZ => regFile1.wz.get
     }
@@ -113,13 +107,13 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.A => (regFile1.a << 8) + regFile1.f
       case RegNames.B => (regFile1.b << 8) + regFile1.c
       case RegNames.D => (regFile1.d << 8) + regFile1.e
-      case RegNames.H if internalRegisters.dd => indexRegisters.ix
-      case RegNames.H if internalRegisters.fd => indexRegisters.iy
+      case RegNames.H if internal.dd => index.ix
+      case RegNames.H if internal.fd => index.iy
       case RegNames.H => (regFile1.h << 8) + regFile1.l
-      case RegNames.IX => indexRegisters.ix
-      case RegNames.IY => indexRegisters.iy
-      case RegNames.PC => controlRegisters.pc
-      case RegNames.SP => controlRegisters.sp
+      case RegNames.IX => index.ix
+      case RegNames.IY => index.iy
+      case RegNames.PC => control.pc
+      case RegNames.SP => control.sp
       case RegNames.DATA16 => regFile1.data16.get
       case RegNames.WZ => regFile1.wz.get
     }
@@ -131,10 +125,10 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
       case RegNames.B => (regFile2.b << 8) + regFile2.c
       case RegNames.D => (regFile2.d << 8) + regFile2.e
       case RegNames.H => (regFile2.h << 8) + regFile2.l
-      case RegNames.IX => indexRegisters.ix
-      case RegNames.IY => indexRegisters.iy
-      case RegNames.PC => controlRegisters.pc
-      case RegNames.SP => controlRegisters.sp
+      case RegNames.IX => index.ix
+      case RegNames.IY => index.iy
+      case RegNames.PC => control.pc
+      case RegNames.SP => control.sp
       case RegNames.DATA16 => regFile2.data16.get
       case RegNames.WZ => regFile2.wz.get
     }
@@ -158,34 +152,34 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   def setIndexReg(reg: RegName, v: Int): IndexRegisters = {
     reg match {
-      case RegNames.IX => indexRegisters.copy(ix = v)
-      case RegNames.IY => indexRegisters.copy(iy = v)
+      case RegNames.IX => index.copy(ix = v)
+      case RegNames.IY => index.copy(iy = v)
     }
   }
 
   def setPC(v: Int): ControlRegisters = {
-    controlRegisters.copy(pc = v)
+    control.copy(pc = v)
   }
 
   def setSP(v: Int): ControlRegisters = {
-    controlRegisters.copy(sp = v)
+    control.copy(sp = v)
   }
 
   def setControlReg(reg: RegName, v: Int): ControlRegisters = {
     reg match {
-      case RegNames.PC => controlRegisters.copy(pc = v)
-      case RegNames.SP => controlRegisters.copy(sp = v)
-      case RegNames.R => controlRegisters.copy(r = v)
+      case RegNames.PC => control.copy(pc = v)
+      case RegNames.SP => control.copy(sp = v)
+      case RegNames.R => control.copy(r = v)
     }
   }
 
   def setInternalReg(reg: RegName, v: Int): InternalRegisters = {
     reg match {
-      case RegNames.X => internalRegisters.copy(x = v)
-      case RegNames.Y => internalRegisters.copy(y = v)
-      case RegNames.Z => internalRegisters.copy(z = v)
-      case RegNames.P => internalRegisters.copy(p = v)
-      case RegNames.Q => internalRegisters.copy(q = v)
+      case RegNames.X => internal.copy(x = v)
+      case RegNames.Y => internal.copy(y = v)
+      case RegNames.Z => internal.copy(z = v)
+      case RegNames.P => internal.copy(p = v)
+      case RegNames.Q => internal.copy(q = v)
     }
   }
 
@@ -324,12 +318,12 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
 
   // set IX
   def setResultIX(v: Int): IndexRegisters = {
-    indexRegisters.copy(ix = v)
+    index.copy(ix = v)
   }
 
   // set IY
   def setResultIY(v: Int): IndexRegisters = {
-    indexRegisters.copy(iy = v)
+    index.copy(iy = v)
   }
 
   private def fixFlags(sf: Option[Boolean], zf: Option[Boolean], f5f: Option[Boolean], hf: Option[Boolean], f3f: Option[Boolean], pvf: Option[Boolean], nf: Option[Boolean], cf: Option[Boolean]): Int = {
@@ -348,8 +342,8 @@ case class Registers(regFile1: BaseRegisters = BaseRegisters(),
   // debug register dump
   def dump(): Unit = {
     for (c <- RegNames.values) {
-      val v = getSafeReg(c)
-      v.foreach(v => println(c + " " + Utils.toHex16(v)))
+      val v = getReg(c)
+      println(c + " " + Utils.toHex16(v))
     }
   }
 

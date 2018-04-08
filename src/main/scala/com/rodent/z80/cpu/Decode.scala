@@ -11,7 +11,7 @@ trait Decode {
     val dst = m & 0x07
     val p = src >> 1
     val q = src & 0x01
-    val ir = registers.internalRegisters.copy(x = i, y = src, z = dst, p = p, q = q)
-    registers.copy(internalRegisters = ir)
+    val ir = registers.internal.copy(x = i, y = src, z = dst, p = p, q = q)
+    registers.copy(internal = ir)
   }
 }
